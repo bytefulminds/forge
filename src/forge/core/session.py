@@ -43,6 +43,8 @@ class TabState:
     cursor_line: int = 0
     cursor_index: int = 0
     first_visible_line: int = 0
+    # "text", "split" or "preview" (Markdown, CSV and JSON documents).
+    view_mode: str = "text"
 
 
 @dataclass

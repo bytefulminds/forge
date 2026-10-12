@@ -7,7 +7,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent
+from PyQt6.QtCore import QCoreApplication, QEvent, Qt
 from PyQt6.QtGui import QFileOpenEvent, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
 
@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging()
     log.info("Starting %s %s", APP_NAME, __version__)
 
+    # Required by the optional Qt WebEngine preview, which loads after start.
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = ForgeApplication(argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)

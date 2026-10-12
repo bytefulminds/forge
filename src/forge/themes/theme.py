@@ -57,6 +57,10 @@ class Theme:
     warning: str
     success: str
     syntax: SyntaxColors
+    # Text colors cycled for nested brackets and CSV columns (all readable on
+    # editor_bg), and tints for indentation levels (drawn with low alpha).
+    rainbow: tuple[str, ...] = ()
+    indent_rainbow: tuple[str, ...] = ()
 
 
 _DARK_PREPROCESSOR = t.mix(t.CYAN, t.LIME, 0.5)
@@ -103,6 +107,15 @@ DARK = Theme(
         preprocessor=_DARK_PREPROCESSOR,
         error=t.ERROR,
     ),
+    rainbow=(
+        t.WARNING,  # gold
+        t.mix(t.ERROR, t.SKY_BLUE, 0.45),  # orchid
+        t.SKY_BLUE,
+        t.LIME,
+        t.CYAN,
+        t.mix(t.WARNING, t.ERROR, 0.5),  # coral
+    ),
+    indent_rainbow=(t.WARNING, t.LIME, t.mix(t.ERROR, t.SKY_BLUE, 0.45), t.SKY_BLUE),
 )
 
 LIGHT = Theme(
@@ -147,6 +160,15 @@ LIGHT = Theme(
         preprocessor=t.shade(_DARK_PREPROCESSOR, 0.26),
         error=t.shade(t.ERROR, 0.42),
     ),
+    rainbow=(
+        t.shade(t.WARNING, 0.30),
+        t.shade(t.mix(t.ERROR, t.SKY_BLUE, 0.45), 0.42),
+        t.shade(t.SKY_BLUE, 0.38),
+        t.shade(t.LIME, 0.23),
+        t.shade(t.CYAN, 0.27),
+        t.shade(t.mix(t.WARNING, t.ERROR, 0.5), 0.36),
+    ),
+    indent_rainbow=(t.WARNING, t.LIME, t.mix(t.ERROR, t.SKY_BLUE, 0.45), t.SKY_BLUE),
 )
 
 THEMES: dict[str, Theme] = {DARK.id: DARK, LIGHT.id: LIGHT}

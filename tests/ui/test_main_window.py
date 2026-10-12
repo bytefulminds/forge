@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QPushButton
 from pytestqt.qtbot import QtBot
 
 from forge.core.encoding import TextEncoding
@@ -14,6 +14,7 @@ from forge.core.settings import Settings
 from forge.editor.commenting import CommentMode
 from forge.editor.lexers import language_by_id
 from forge.i18n.translator import install_language
+from forge.ui import file_dialogs, message_box
 from forge.ui.main_window import MainWindow
 
 
@@ -70,7 +71,7 @@ def test_edit_and_save(qtbot: QtBot, tmp_path: Path) -> None:
     assert tab is not None
     tab.append("two\r\n")
     assert tab.is_dirty
-    assert window.tabs.tabText(window.tabs.indexOf(tab)) == "notes.txt"
+    assert window.tabs.tabText(window._index_of(tab)) == "notes.txt"
     assert window.save(tab)
     assert not tab.is_dirty
     assert file.read_bytes() == b"one\r\ntwo\r\n"
@@ -82,13 +83,13 @@ def test_close_dirty_tab_can_be_cancelled(qtbot: QtBot, monkeypatch: pytest.Monk
     assert tab is not None
     tab.setText("unsaved")
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Cancel
+        message_box, "question", lambda *_a, **_k: QMessageBox.StandardButton.Cancel
     )
     assert not window.close_tab(tab)
     assert window.tabs.count() == 1
 
     monkeypatch.setattr(
-        QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Discard
+        message_box, "question", lambda *_a, **_k: QMessageBox.StandardButton.Discard
     )
     assert window.close_tab(tab)
     assert window.tabs.count() == 1  # a fresh "new 1" replaces the last tab
@@ -106,9 +107,9 @@ def _fake_save_dialog(monkeypatch: pytest.MonkeyPatch, file: Path, use_filter: b
 
     def fake(_parent, _caption, directory, filters, selected):  # type: ignore[no-untyped-def]
         seen.append(directory)
-        return str(file), (selected if use_filter else filters.split(";;")[-1])
+        return str(file), (selected if use_filter else filters[-1])
 
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", fake)
+    monkeypatch.setattr(file_dialogs, "get_save_file", fake)
     return seen
 
 
@@ -165,7 +166,7 @@ def test_save_as_asks_before_overwriting_after_adding_extension(
     tab.setText("new content")
     window.set_document_language(language_by_id("json"))
     _fake_save_dialog(monkeypatch, tmp_path / "data", use_filter=True)
-    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(message_box, "question", lambda *_a, **_k: QMessageBox.StandardButton.No)
 
     assert not window.save_as(tab)
     assert existing.read_text() == "keep"
@@ -270,7 +271,7 @@ def test_session_restores_tabs_unsaved_text_and_active_tab(qtbot: QtBot, tmp_pat
     edited_tab.setText('{"unsaved": true}\n')
     untitled = first.new_document()
     untitled.setText("scratch notes")
-    first.tabs.setCurrentWidget(edited_tab)
+    first._show(edited_tab)
     first.close()  # no questions, the session keeps everything
 
     second = make_window(qtbot)
@@ -541,3 +542,222 @@ def test_language_filter_removes_rows_instead_of_hiding(qtbot: QtBot) -> None:
     assert model is not None
     assert model.rowCount() == len(picker.visible_labels()) == 2  # Java, JavaScript
     assert not any(picker.list.isRowHidden(r) for r in range(model.rowCount()))
+
+
+def test_view_modes_for_markdown_csv_and_json(qtbot: QtBot, tmp_path: Path) -> None:
+    from forge.ui.previews import CsvPreview, JsonPreview, MarkdownPreview
+
+    md = tmp_path / "a.md"
+    md.write_text("# Title\n\nSome *text*.\n")
+    csv_file = tmp_path / "b.csv"
+    csv_file.write_text("x,y\n1,2\n3,4\n")
+    window = make_window(qtbot)
+    tab = window.open_path(md)
+    assert tab is not None
+    toolbar = window.page_of(tab).toolbar
+    assert not toolbar.mode_buttons["split"].isHidden()
+    assert "markdown.bold" in toolbar.tool_buttons
+    toolbar.mode_buttons["split"].click()
+    assert toolbar.mode_buttons["split"].isChecked()
+    page = window.page_of(tab)
+    assert isinstance(page.preview, MarkdownPreview)
+    assert "Title" in page.preview.browser.toPlainText()
+    window.set_view_mode(tab, "preview")
+    assert tab.isHidden()
+
+    table_tab = window.open_path(csv_file)
+    assert table_tab is not None
+    window.set_view_mode(table_tab, "split")
+    preview = window.page_of(table_tab).preview
+    assert isinstance(preview, CsvPreview)
+    assert preview.model.rowCount() == 2 and preview.model.columnCount() == 2
+
+    plain = window.new_document()
+    plain_bar = window.page_of(plain).toolbar
+    assert plain_bar.mode_buttons["text"].isHidden()  # plain text has no preview
+    assert not plain_bar.tool_buttons
+    plain.setText('{"a": 1}')
+    window.set_document_language(language_by_id("json"))
+    assert not plain_bar.mode_buttons["text"].isHidden()
+    assert {"json.format", "json.tree"} <= set(plain_bar.tool_buttons)
+    window.toggle_preview()
+    assert isinstance(window.page_of(plain).preview, JsonPreview)
+
+
+def test_view_mode_is_restored_with_the_session(qtbot: QtBot, tmp_path: Path) -> None:
+    md = tmp_path / "a.md"
+    md.write_text("# Title\n")
+    first = make_window(qtbot)
+    tab = first.open_path(md)
+    assert tab is not None
+    first.set_view_mode(tab, "split")
+    first.close()
+    second = make_window(qtbot)
+    restored = second.current_tab()
+    assert restored is not None
+    assert second.page_of(restored).mode == "split"
+
+
+def test_problem_in_status_bar(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    window.set_document_language(language_by_id("json"))
+    tab.setText('{\n  "a": 1,\n}')
+    tab.run_check()
+    assert tab.diagnostic is not None
+    assert not window.status.problem.isHidden()
+    tab.setText('{"a": 1}')
+    tab.run_check()
+    assert window.status.problem.isHidden()
+
+
+def test_autocomplete_settings_apply(qtbot: QtBot) -> None:
+    from PyQt6.Qsci import QsciScintilla
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    assert tab.autoCompletionSource() == QsciScintilla.AutoCompletionSource.AcsDocument
+    window.set_document_language(language_by_id("python"))
+    assert tab.autoCompletionSource() == QsciScintilla.AutoCompletionSource.AcsAll
+    window.settings.editor.autocomplete = False
+    tab.apply_settings(window.settings.editor)
+    assert tab.autoCompletionSource() == QsciScintilla.AutoCompletionSource.AcsNone
+
+
+def test_document_toolbar_runs_tools_and_toggles_wrap(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.new_document()
+    tab.setText('{"a":1}')
+    window.set_document_language(language_by_id("json"))
+    toolbar = window.page_of(tab).toolbar
+    toolbar.tool_buttons["json.format"].click()
+    assert tab.text() == '{\n    "a": 1\n}'
+    wrap_before = window.settings.editor.word_wrap
+    toolbar.wrap_button.click()
+    assert window.settings.editor.word_wrap is not wrap_before
+    other = window.new_document()
+    assert window.page_of(other).toolbar.wrap_button.isChecked() is not wrap_before
+    window._view_actions["toolbar"].setChecked(False)
+    assert toolbar.isHidden()
+
+
+def test_markdown_toolbar_edits(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.new_document()
+    window.set_document_language(language_by_id("markdown"))
+    tab.setText("word\nsecond")
+    tab.setSelection(0, 0, 0, 4)
+    bar = window.page_of(tab).toolbar
+    bar.tool_buttons["markdown.bold"].click()
+    assert tab.text() == "**word**\nsecond"
+    assert tab.selectedText() == "word"
+    bar.tool_buttons["markdown.bold"].click()
+    assert tab.text() == "word\nsecond"
+    tab.selectAll()
+    bar.tool_buttons["markdown.numbers"].click()
+    assert tab.text() == "1. word\n2. second"
+    bar.tool_buttons["markdown.numbers"].click()
+    assert tab.text() == "word\nsecond"
+    tab.setCursorPosition(0, 0)
+    bar.tool_buttons["markdown.heading"].click()
+    bar.tool_buttons["markdown.heading"].click()
+    assert tab.text() == "## word\nsecond"
+    assert "edit.toggle_comment" not in bar.tool_buttons  # Markdown has no comments
+
+
+def test_csv_tools_in_window(qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.tools.csv_tool import actions as csv_actions
+    from forge.ui.previews import CsvPreview
+
+    file = tmp_path / "data.csv"
+    file.write_text("name;created\nzoe;1700000000\nann;1600000000\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    bar = window.page_of(tab).toolbar
+    assert {"csv.delimiter", "csv.sort_asc", "csv.epoch_to_iso", "csv.to_json"} <= set(
+        bar.tool_buttons
+    )
+    assert tab.csv_delimiter == ";"
+    assert not window.status.delimiter.isHidden()
+
+    tab.setCursorPosition(1, 1)
+    bar.tool_buttons["csv.sort_asc"].click()
+    assert tab.text() == "name;created\nann;1600000000\nzoe;1700000000\n"
+
+    tab.setCursorPosition(1, 6)
+    window.status.update_position(tab)
+    assert "created" in window.status.column.text()
+    bar.tool_buttons["csv.epoch_to_iso"].click()
+    assert tab.text().splitlines()[1] == "ann;2020-09-13T12:26:40Z"
+    tab.undo()
+    assert tab.text().splitlines()[1] == "ann;1600000000"
+
+    # Choosing a delimiter reads the file differently, also in the table view.
+    monkeypatch.setattr(csv_actions, "_pick", lambda *_a, **_k: ",")
+    bar.tool_buttons["csv.delimiter"].click()
+    assert tab.csv_delimiter == "," and tab.csv_delimiter_choice == ","
+    window.set_view_mode(tab, "split")
+    preview = window.page_of(tab).preview
+    assert isinstance(preview, CsvPreview) and preview.model.columnCount() == 1
+    monkeypatch.setattr(csv_actions, "_pick", lambda *_a, **_k: "")
+    bar.tool_buttons["csv.delimiter"].click()
+    assert tab.csv_delimiter == ";" and tab.csv_delimiter_choice is None
+
+    bar.tool_buttons["csv.to_json"].click()
+    json_tab = window.current_tab()
+    assert json_tab is not None and json_tab.language.id == "json"
+    assert '"name": "ann"' in json_tab.text()
+
+
+def test_csv_column_problem_is_underlined(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.new_document()
+    window.set_document_language(language_by_id("csv"))
+    tab.setText("a,b\n1,2\n3,4,5\n")
+    tab.run_check()
+    assert tab.diagnostic is not None and tab.diagnostic.line == 3
+
+
+def test_forge_save_dialog_is_framed_and_returns_the_choice(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.ui.file_dialogs import ForgeFileDialog
+
+    def accept(dialog: ForgeFileDialog) -> int:
+        assert dialog.windowFlags() & Qt.WindowType.FramelessWindowHint
+        assert dialog.files.parent() is dialog.body  # embedded, not a separate window
+        dialog.files.selectFile(str(tmp_path / "out.md"))
+        return int(ForgeFileDialog.DialogCode.Accepted)
+
+    monkeypatch.setattr(ForgeFileDialog, "exec", accept)
+    window = make_window(qtbot)
+    path, chosen = file_dialogs.get_save_file(
+        window,
+        "Save As",
+        str(tmp_path / "x.md"),
+        ["Markdown (*.md)", "All files (*)"],
+        "Markdown (*.md)",
+    )
+    assert Path(path).name == "out.md" and chosen == "Markdown (*.md)"
+
+
+def test_framed_message_box_answers(qtbot: QtBot) -> None:
+    from forge.ui.message_box import Button, FramedMessageBox
+
+    window = make_window(qtbot)
+    buttons = Button.Save | Button.Discard | Button.Cancel
+    box = FramedMessageBox("question", "Forge", "Save?", buttons, Button.Save, window)
+    qtbot.addWidget(box)
+    assert box.windowFlags() & Qt.WindowType.FramelessWindowHint
+    box.reject()  # Esc or the close button
+    assert box.answer == Button.Cancel
+    box = FramedMessageBox("question", "Forge", "Save?", buttons, Button.Save, window)
+    qtbot.addWidget(box)
+    box.findChildren(QPushButton)[0].click()
+    assert box.answer in (Button.Save, Button.Discard, Button.Cancel)
+    save = next(b for b in box.findChildren(QPushButton) if b.isDefault())
+    save.click()
+    assert box.answer == Button.Save

@@ -41,6 +41,14 @@ AppDir/
 
 # Logs and local runtime data
 *.log
+.env
+.env.*
+# FORGE_HOME folders used for local testing
+forge-home/
+
+# Hand-over archives between sessions (always local)
+*.tgz
+*.tar.gz
 
 # OS and editor files
 .DS_Store

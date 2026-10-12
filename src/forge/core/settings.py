@@ -34,12 +34,21 @@ class EditorSettings:
     show_whitespace: bool = False
     show_line_numbers: bool = True
     highlight_current_line: bool = True
+    rainbow_brackets: bool = True
+    rainbow_indentation: bool = True
+    check_syntax: bool = True
+    autocomplete: bool = True
+    autocomplete_threshold: int = 3
+    # The per-document toolbar with language tools and view buttons.
+    show_toolbar: bool = True
 
 
 @dataclass
 class GeneralSettings:
     # Notepad++ "Remember current session": reopen tabs, including unsaved text.
     remember_session: bool = True
+    # Native Open / Save dialogs (Finder, GTK, KDE) instead of Forge styled ones.
+    native_file_dialogs: bool = False
 
 
 @dataclass
@@ -62,6 +71,8 @@ class Settings:
     editor: EditorSettings = field(default_factory=EditorSettings)
     appearance: AppearanceSettings = field(default_factory=AppearanceSettings)
     window: WindowSettings = field(default_factory=WindowSettings)
+    # Per built-in tool settings, keyed by extension id (see ForgeAPI.setting).
+    tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     schema: int = SCHEMA_VERSION
 
     @classmethod
@@ -80,12 +91,19 @@ class Settings:
             editor=_build(EditorSettings, raw.get("editor", {})),
             appearance=_build(AppearanceSettings, raw.get("appearance", {})),
             window=_build(WindowSettings, raw.get("window", {})),
+            tools=_tools(raw.get("tools", {})),
         )
 
     def save(self, path: Path | None = None) -> None:
         path = path or paths.settings_file()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(tomli_w.dumps(asdict(self)), encoding="utf-8")
+
+
+def _tools(raw: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): dict(v) for k, v in raw.items() if isinstance(v, dict)}
 
 
 def _migrate(raw: dict[str, Any]) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
-    QFileDialog,
+    QDockWidget,
     QHBoxLayout,
     QMainWindow,
     QMenu,
@@ -50,6 +51,7 @@ from forge.core.tasks import run_in_background
 from forge.core.watcher import FileWatcher
 from forge.editor import search
 from forge.editor.commenting import CommentMode
+from forge.editor.forge_editor import ForgeEditor
 from forge.editor.lexers import (
     PLAIN_TEXT,
     Language,
@@ -58,12 +60,17 @@ from forge.editor.lexers import (
     language_by_id,
     language_for_path,
 )
+from forge.extensions.api import EditorHandle
 from forge.i18n.catalog import LANGUAGES
 from forge.i18n.translator import current_language, tr
 from forge.themes.theme import SYSTEM_THEME_ID, THEME_CHOICES, Theme, get_theme
+from forge.ui import file_dialogs, message_box
 from forge.ui.appearance import apply_theme as apply_app_theme
 from forge.ui.appearance import round_popup_menus, system_prefers_dark
+from forge.ui.document_page import DocumentPage
 from forge.ui.document_tab import DocumentTab
+from forge.ui.document_toolbar import ToolItem
+from forge.ui.extension_host import ExtensionHost
 from forge.ui.find_bar import FindBar
 from forge.ui.format_menus import EncodingMenu, EolMenu
 from forge.ui.goto_dialog import GoToLineDialog
@@ -101,6 +108,9 @@ FIND_NEXT_SHORTCUTS = ["F3", "Ctrl+G"] if IS_MAC else ["F3"]
 FIND_PREVIOUS_SHORTCUTS = ["Shift+F3", "Ctrl+Shift+G"] if IS_MAC else ["Shift+F3"]
 REPLACE_SHORTCUT = "Ctrl+Alt+F" if IS_MAC else "Ctrl+H"
 GO_TO_LINE_SHORTCUT = "Ctrl+L" if IS_MAC else "Ctrl+G"
+# Word completion: Ctrl+Enter as in Notepad++, plus Ctrl+Space on Linux (on
+# macOS Cmd+Space opens Spotlight).
+COMPLETE_WORD_SHORTCUTS = ["Ctrl+Return"] if IS_MAC else ["Ctrl+Space", "Ctrl+Return"]
 EXIT_SHORTCUT: Shortcut = QKeySequence.StandardKey.Quit if IS_MAC else "Alt+F4"
 
 
@@ -132,6 +142,7 @@ def path_for_save(chosen: Path, language: Language, language_filter_selected: bo
 class MainWindow(QMainWindow):
     def __init__(self, settings: Settings, icon: QIcon | None = None) -> None:
         super().__init__()
+        file_dialogs.use_native_dialogs = settings.general.native_file_dialogs
         # Frameless everywhere: Forge draws its own title bar so it looks the
         # same on macOS, Linux and Windows.
         self._frameless = True
@@ -172,9 +183,15 @@ class MainWindow(QMainWindow):
 
         # "+" right after the last tab, like a browser. The empty corner widget
         # reserves room for it when the tabs fill the whole width.
-        reserve = QWidget(self.tabs)
-        reserve.setFixedSize(NEW_TAB_BUTTON_SIZE + 12, 1)
-        self.tabs.setCornerWidget(reserve, Qt.Corner.TopRightCorner)
+        corner = QWidget(self.tabs)
+        corner.setObjectName("tabCorner")
+        corner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        corner_layout = QHBoxLayout(corner)
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(0)
+        corner_layout.addSpacing(NEW_TAB_BUTTON_SIZE + 12)
+        self._corner = corner
+        self.tabs.setCornerWidget(corner, Qt.Corner.TopRightCorner)
         self._new_tab_button = QToolButton(self.tabs)
         self._new_tab_button.setObjectName("newTabButton")
         self._new_tab_button.setText("+")
@@ -184,6 +201,10 @@ class MainWindow(QMainWindow):
         self._new_tab_button.setToolTip(tr("New Tab"))
         self._new_tab_button.clicked.connect(self.new_document)
 
+        self.extension_host = ExtensionHost(self)
+        self.extension_events = self.extension_host.events
+        self._panels: dict[str, QDockWidget] = {}
+        self._viewers: list[ForgeEditor] = []
         self._menu_bar = QMenuBar(self)
         self._build_menus()
         round_popup_menus(self._menu_bar)
@@ -200,6 +221,10 @@ class MainWindow(QMainWindow):
             self._language_menu, self._eol_status_menu, self._encoding_status_menu, self
         )
         self.status.position.clicked.connect(self.go_to_line)
+        self.status.delimiter.clicked.connect(
+            lambda: self.extension_host.run_command("csv.delimiter")
+        )
+        self.status.problem.clicked.connect(self.go_to_problem)
         self.setStatusBar(self.status)
 
         self.setAcceptDrops(True)
@@ -219,6 +244,8 @@ class MainWindow(QMainWindow):
         self._session_timer.setInterval(SESSION_AUTOSAVE_MS)
         self._session_timer.timeout.connect(self._autosave_session)
         self._session_timer.start()
+        # Tools that hook into editing start once the window is up.
+        QTimer.singleShot(0, self.extension_host.start)
 
     # Tabs ----------------------------------------------------------------
 
@@ -229,7 +256,21 @@ class MainWindow(QMainWindow):
 
     def tab_at(self, index: int) -> DocumentTab | None:
         widget = self.tabs.widget(index)
-        return widget if isinstance(widget, DocumentTab) else None
+        return widget.editor if isinstance(widget, DocumentPage) else None
+
+    def page_of(self, tab: DocumentTab) -> DocumentPage:
+        page = tab.page
+        assert isinstance(page, DocumentPage)
+        return page
+
+    def _index_of(self, tab: DocumentTab) -> int:
+        page = tab.page
+        return self.tabs.indexOf(page) if page is not None else -1
+
+    def _show(self, tab: DocumentTab) -> None:
+        page = tab.page
+        if page is not None:
+            self.tabs.setCurrentWidget(page)
 
     def all_tabs(self) -> list[DocumentTab]:
         return [tab for i in range(self.tabs.count()) if (tab := self.tab_at(i)) is not None]
@@ -255,8 +296,16 @@ class MainWindow(QMainWindow):
         tab.cursorPositionChanged.connect(lambda *_args, t=tab: self._on_cursor_moved(t))
         tab.selectionChanged.connect(lambda t=tab: self._on_cursor_moved(t))
         tab.files_dropped.connect(self.open_paths)
+        tab.SCN_CHARADDED.connect(lambda ch, t=tab: self._on_char_added(t, ch))
+        tab.diagnostic_changed.connect(lambda t=tab: self._on_diagnostic_changed(t))
         tab.textChanged.connect(self._mark_session_changed)
-        index = self.tabs.addTab(tab, tab.title)
+        page = DocumentPage(tab, self.theme, self._toolbar_items)
+        page.toolbar.mode_chosen.connect(lambda mode, t=tab: self.set_view_mode(t, mode))
+        page.toolbar.wrap_toggled.connect(self._view_actions["wrap"].setChecked)
+        page.toolbar.set_wrap(self.settings.editor.word_wrap)
+        page.toolbar.setVisible(self.settings.editor.show_toolbar)
+        tab.page = page
+        index = self.tabs.addTab(page, tab.title)
         self._add_close_button(index, tab)
         self.tabs.setCurrentIndex(index)
         self._refresh_tab(tab)
@@ -265,6 +314,11 @@ class MainWindow(QMainWindow):
         return tab
 
     def _add_close_button(self, index: int, tab: DocumentTab) -> None:
+        box, button = self._close_box(lambda: self.close_tab(tab))
+        tab.close_button = button
+        self._tab_bar().setTabButton(index, QTabBar.ButtonPosition.RightSide, box)
+
+    def _close_box(self, on_click: Callable[[], object]) -> tuple[QWidget, QToolButton]:
         bar = self._tab_bar()
         button = QToolButton(bar)
         button.setObjectName("tabCloseButton")
@@ -272,7 +326,7 @@ class MainWindow(QMainWindow):
         button.setAutoRaise(True)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolTip(tr("Close"))
-        button.clicked.connect(lambda _checked=False, t=tab: self.close_tab(t))
+        button.clicked.connect(lambda _checked=False: on_click())
         button.installEventFilter(self)
         # A small box with margins keeps the button inside the tab instead of
         # on its edge.
@@ -282,8 +336,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(4, TAB_BUTTON_TOP_OFFSET, 8, 0)
         layout.setSpacing(0)
         layout.addWidget(button)
-        tab.close_button = button
-        bar.setTabButton(index, QTabBar.ButtonPosition.RightSide, box)
+        return box, button
 
     def _position_new_tab_button(self) -> None:
         bar = self._tab_bar()
@@ -295,7 +348,8 @@ class MainWindow(QMainWindow):
             y = geometry.y() + last.center().y() - button.height() // 2 + 2
         else:
             x, y = geometry.x() + 6, geometry.y() + 4
-        x = min(x, self.tabs.width() - button.width() - 6)
+        corner_left = self._corner.x() if self._corner.isVisible() else self.tabs.width()
+        x = min(x, corner_left - button.width() - 6)
         button.move(x, y)
         button.raise_()
 
@@ -303,11 +357,12 @@ class MainWindow(QMainWindow):
         return tab.close_button
 
     def _refresh_tab(self, tab: DocumentTab) -> None:
-        index = self.tabs.indexOf(tab)
+        index = self._index_of(tab)
         if index < 0:
             return
         self.tabs.setTabText(index, tab.title)
         self.tabs.setTabToolTip(index, str(tab.doc.path or tab.title))
+        QTimer.singleShot(0, self._position_new_tab_button)
         button = self._close_button(tab)
         if button is not None:
             # A dot replaces the close cross while there are unsaved changes,
@@ -340,9 +395,14 @@ class MainWindow(QMainWindow):
         elif obj is self.tabs.tabBar() and event.type() == QEvent.Type.MouseButtonRelease:
             assert isinstance(event, QMouseEvent)
             if event.button() == Qt.MouseButton.MiddleButton:
-                tab = self.tab_at(self._tab_bar().tabAt(event.position().toPoint()))
+                index = self._tab_bar().tabAt(event.position().toPoint())
+                tab = self.tab_at(index)
                 if tab is not None:
                     self.close_tab(tab)
+                    return True
+                widget = self.tabs.widget(index)
+                if widget is not None:
+                    self.close_tool_tab(widget)
                     return True
         return super().eventFilter(obj, event)
 
@@ -357,12 +417,16 @@ class MainWindow(QMainWindow):
 
     def _on_current_changed(self, _index: int) -> None:
         self._mark_session_changed()
+        QTimer.singleShot(0, self._position_new_tab_button)
         tab = self.current_tab()
         self.status.show_tab(tab)
         self._update_window_title()
         self._sync_language_menu(tab)
         self._show_notice_for(tab)
+        self._update_view_switch(tab)
         self.find_bar.attach(tab)
+        if self.extension_events.has("tab_changed"):
+            self.extension_events.emit("tab_changed", EditorHandle(tab) if tab else None)
         if tab is not None:
             tab.setFocus()
 
@@ -421,7 +485,7 @@ class MainWindow(QMainWindow):
         return self._add_tab(Document(untitled_index=self._next_untitled_index()))
 
     def open_dialog(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, tr("Open"), str(self._dialog_dir()))
+        files = file_dialogs.get_open_files(self, tr("Open"), str(self._dialog_dir()))
         self.open_paths([Path(f) for f in files])
 
     def open_paths(self, paths: Iterable[Path]) -> None:
@@ -432,12 +496,12 @@ class MainWindow(QMainWindow):
         path = path.expanduser().resolve()
         for tab in self.all_tabs():
             if tab.doc.path == path:
-                self.tabs.setCurrentWidget(tab)
+                self._show(tab)
                 return tab
         if path.is_dir():
             return None
         if not path.exists():
-            QMessageBox.warning(self, APP_NAME, tr("File not found: {path}", path=str(path)))
+            message_box.warning(self, APP_NAME, tr("File not found: {path}", path=str(path)))
             return None
 
         self._last_dir = path.parent
@@ -551,7 +615,7 @@ class MainWindow(QMainWindow):
 
     def _show_open_error(self, path: Path, exc: Exception) -> None:
         log.warning("Could not open %s: %s", path, exc)
-        QMessageBox.warning(
+        message_box.warning(
             self,
             APP_NAME,
             tr("Could not open {path}:\n{error}", path=str(path), error=str(exc)),
@@ -587,12 +651,8 @@ class MainWindow(QMainWindow):
         else:
             proposed = self._dialog_dir(tab) / f"{tab.title}{language.default_extension}"
         lang_filter = language_filter(language)
-        file, selected = QFileDialog.getSaveFileName(
-            self,
-            tr("Save As"),
-            str(proposed),
-            ";;".join((lang_filter, all_files_filter())),
-            lang_filter,
+        file, selected = file_dialogs.get_save_file(
+            self, tr("Save As"), str(proposed), [lang_filter, all_files_filter()], lang_filter
         )
         if not file:
             return False
@@ -601,7 +661,7 @@ class MainWindow(QMainWindow):
         if path != chosen and path.exists() and not self._confirm_overwrite(path):
             return False
         if any(other is not tab and other.doc.path == path for other in self.all_tabs()):
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 APP_NAME,
                 tr("{name} is already open in another tab. Close it first.", name=path.name),
@@ -627,7 +687,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _confirm_overwrite(self, path: Path) -> bool:
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APP_NAME,
             tr("{name} already exists. Do you want to replace it?", name=path.name),
@@ -639,7 +699,7 @@ class MainWindow(QMainWindow):
     def save_all(self) -> None:
         for tab in self.all_tabs():
             if tab.is_dirty:
-                self.tabs.setCurrentWidget(tab)
+                self._show(tab)
                 if not self.save(tab):
                     return
 
@@ -647,7 +707,7 @@ class MainWindow(QMainWindow):
         try:
             save_text(path, tab.text(), tab.doc.encoding)
         except UnicodeEncodeError:
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 APP_NAME,
                 tr(
@@ -659,7 +719,7 @@ class MainWindow(QMainWindow):
             return False
         except OSError as exc:
             log.warning("Could not save %s: %s", path, exc)
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 APP_NAME,
                 tr("Could not save {path}:\n{error}", path=str(path), error=str(exc)),
@@ -678,13 +738,13 @@ class MainWindow(QMainWindow):
         """Ask to save a dirty tab. Returns False when the user cancels."""
         if not tab.is_dirty:
             return True
-        self.tabs.setCurrentWidget(tab)
+        self._show(tab)
         buttons = (
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel
         )
-        answer = QMessageBox.question(
+        answer = message_box.question(
             self,
             APP_NAME,
             tr("Do you want to save the changes to {name}?", name=tab.title),
@@ -721,10 +781,12 @@ class MainWindow(QMainWindow):
         tab.cancel_loading()
         if tab.doc.path is not None:
             self._unwatch_if_unused(tab.doc.path, ignore=tab)
-        index = self.tabs.indexOf(tab)
+        index = self._index_of(tab)
         if index >= 0:
             self.tabs.removeTab(index)
-        tab.deleteLater()
+        page = tab.page
+        tab.page = None
+        (page or tab).deleteLater()
         self._mark_session_changed()
         QTimer.singleShot(0, self._position_new_tab_button)
 
@@ -818,6 +880,7 @@ class MainWindow(QMainWindow):
                     cursor_line=line,
                     cursor_index=index,
                     first_visible_line=tab.firstVisibleLine(),
+                    view_mode=self.page_of(tab).mode if tab.page is not None else "text",
                 )
             )
         return state, backups
@@ -849,7 +912,7 @@ class MainWindow(QMainWindow):
         if not tabs:
             return
         active = restored[state.active] if 0 <= state.active < len(restored) else None
-        self.tabs.setCurrentWidget(active or tabs[-1])
+        self._show(active or tabs[-1])
 
     def _restore_tab(self, state: TabState) -> DocumentTab | None:
         path = Path(state.path) if state.path else None
@@ -858,6 +921,8 @@ class MainWindow(QMainWindow):
         def place_cursor(tab: DocumentTab) -> None:
             tab.setCursorPosition(state.cursor_line, state.cursor_index)
             tab.setFirstVisibleLine(state.first_visible_line)
+            if state.view_mode != "text":
+                self.set_view_mode(tab, state.view_mode)
 
         if state.backup:
             text = read_backup(state.backup)
@@ -995,7 +1060,7 @@ class MainWindow(QMainWindow):
         if tab is None or tab.loading or encoding == tab.doc.encoding:
             return
         if not can_encode(tab.text(), encoding):
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 APP_NAME,
                 tr(
@@ -1024,7 +1089,7 @@ class MainWindow(QMainWindow):
             self._sync_menus(tab)
             return
         if tab.is_dirty:
-            answer = QMessageBox.question(
+            answer = message_box.question(
                 self,
                 APP_NAME,
                 tr(
@@ -1041,7 +1106,7 @@ class MainWindow(QMainWindow):
         try:
             text = reinterpret(path.read_bytes(), encoding)
         except UnicodeDecodeError:
-            QMessageBox.warning(
+            message_box.warning(
                 self,
                 APP_NAME,
                 tr("{name} is not valid {encoding}.", name=tab.title, encoding=encoding.label),
@@ -1059,6 +1124,146 @@ class MainWindow(QMainWindow):
         tab.setCursorPosition(min(line, max(0, tab.lines() - 1)), index)
         self.status.show_tab(tab)
         self._sync_menus(tab)
+
+    # Tools (extension host callbacks) ------------------------------------------
+
+    def _on_char_added(self, tab: DocumentTab, char: int) -> None:
+        if self.extension_events.has("char_added"):
+            self.extension_events.emit("char_added", EditorHandle(tab), chr(char))
+
+    def show_tool_notice(
+        self, message: str, kind: str, actions: list[tuple[str, Callable[[], object]]]
+    ) -> None:
+        tab = self.current_tab()
+        if tab is None:
+            self.status.showMessage(message, 6000)
+            return
+        self._set_notice(tab, Notice(kind, message, actions))
+
+    def dialog_dir(self) -> Path:
+        return self._dialog_dir()
+
+    def show_panel(self, panel_id: str, title: str, factory: Callable[[], QWidget]) -> QWidget:
+        dock = self._panels.get(panel_id)
+        if dock is None:
+            dock = QDockWidget(title, self)
+            dock.setObjectName(f"panel-{panel_id}")
+            dock.setFeatures(
+                QDockWidget.DockWidgetFeature.DockWidgetClosable
+                | QDockWidget.DockWidgetFeature.DockWidgetMovable
+            )
+            dock.setWidget(factory())
+            self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+            self._panels[panel_id] = dock
+        dock.show()
+        dock.raise_()
+        widget = dock.widget()
+        assert widget is not None
+        return widget
+
+    def add_tool_tab(self, widget: QWidget, title: str) -> None:
+        index = self.tabs.addTab(widget, title)
+        box, _button = self._close_box(lambda: self.close_tool_tab(widget))
+        self._tab_bar().setTabButton(index, QTabBar.ButtonPosition.RightSide, box)
+        self.tabs.setCurrentIndex(index)
+        QTimer.singleShot(0, self._position_new_tab_button)
+
+    def close_tool_tab(self, widget: QWidget) -> None:
+        index = self.tabs.indexOf(widget)
+        if index >= 0:
+            self.tabs.removeTab(index)
+        widget.deleteLater()
+        if self.tabs.count() == 0:
+            self.new_document()
+        QTimer.singleShot(0, self._position_new_tab_button)
+
+    def create_viewer(self) -> ForgeEditor:
+        viewer = ForgeEditor(self.settings.editor, self.theme)
+        viewer.setReadOnly(True)
+        self._viewers.append(viewer)
+        return viewer
+
+    def _live_viewers(self) -> list[ForgeEditor]:
+        alive: list[ForgeEditor] = []
+        for viewer in self._viewers:
+            try:
+                viewer.objectName()
+            except RuntimeError:  # deleted with its tool tab
+                continue
+            alive.append(viewer)
+        self._viewers = alive
+        return alive
+
+    # Document views (text / split / preview) ----------------------------------
+
+    def set_view_mode(self, tab: QWidget, mode: str) -> None:
+        if not isinstance(tab, DocumentTab) or tab.page is None:
+            return
+        page = self.page_of(tab)
+        page.set_mode(mode)
+        if tab is self.current_tab():
+            self._update_view_switch(tab)
+        self._mark_session_changed()
+
+    def _set_current_view_mode(self, mode: str) -> None:
+        tab = self.current_tab()
+        if tab is not None:
+            self.set_view_mode(tab, mode)
+
+    def toggle_preview(self) -> None:
+        tab = self.current_tab()
+        if tab is None or tab.page is None:
+            return
+        page = self.page_of(tab)
+        if not page.supports_preview:
+            name = tr("Normal text") if tab.language is PLAIN_TEXT else tab.language.name
+            self.status.showMessage(tr("{language} has no preview.", language=name), 3000)
+            return
+        self.set_view_mode(tab, "text" if page.mode != "text" else "split")
+
+    def _update_view_switch(self, tab: DocumentTab | None) -> None:
+        page = tab.page if tab is not None else None
+        supported = isinstance(page, DocumentPage) and page.supports_preview
+        for action in self._view_mode_actions.values():
+            action.setEnabled(supported)
+        if isinstance(page, DocumentPage):
+            mode = page.mode if supported else "text"
+            self._view_mode_actions[mode].setChecked(True)
+
+    def refresh_current_tab(self) -> None:
+        """Show the current document's state again after a tool changed it."""
+        tab = self.current_tab()
+        self.status.show_tab(tab)
+        self._sync_language_menu(tab)
+
+    def _toolbar_items(self, tab: DocumentTab) -> list[ToolItem]:
+        """Language tools for the document toolbar of ``tab``."""
+        items = self.extension_host.toolbar_items(tab.language.id)
+        if tab.language.comment.supported:
+            items.insert(
+                0,
+                ToolItem(
+                    key="edit.toggle_comment",
+                    icon="message-square-code",
+                    tooltip=tr("Toggle Comment"),
+                    run=lambda: self._comment(CommentMode.TOGGLE),
+                ),
+            )
+            if len(items) > 1:
+                items[1] = replace(items[1], separator_before=True)
+        return items
+
+    # Syntax errors -------------------------------------------------------------
+
+    def _on_diagnostic_changed(self, tab: DocumentTab) -> None:
+        if tab is self.current_tab():
+            self.status.show_problem(tab)
+
+    def go_to_problem(self) -> None:
+        tab = self.current_tab()
+        if tab is None or tab.diagnostic is None:
+            return
+        EditorHandle(tab).go_to(tab.diagnostic.line, tab.diagnostic.column)
 
     # Search ----------------------------------------------------------------
 
@@ -1093,11 +1298,19 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self, theme: Theme, follow_system: bool = False) -> None:
         self.theme = theme
+        file_dialogs.current_theme = theme
         app = QApplication.instance()
         if isinstance(app, QApplication):
             apply_app_theme(app, theme, follow_system)
         for tab in self.all_tabs():
             tab.apply_theme(theme)
+        for viewer in self._live_viewers():
+            viewer.apply_theme(theme)
+        for tab in self.all_tabs():
+            if tab.page is not None:
+                self.page_of(tab).apply_theme(theme)
+        if hasattr(self, "extension_events"):
+            self.extension_events.emit("theme_changed", theme)
 
     def apply_appearance(self) -> None:
         """Apply the configured theme; "system" follows the OS dark/light setting."""
@@ -1136,14 +1349,26 @@ class MainWindow(QMainWindow):
             "wrap": ed.word_wrap,
             "whitespace": ed.show_whitespace,
             "numbers": ed.show_line_numbers,
+            "brackets": ed.rainbow_brackets,
+            "indent": ed.rainbow_indentation,
         }
+        states["toolbar"] = ed.show_toolbar
         for key, action in self._view_actions.items():
             action.blockSignals(True)
             action.setChecked(states[key])
             action.blockSignals(False)
+        for tab in self.all_tabs():
+            if tab.page is not None:
+                page = self.page_of(tab)
+                page.toolbar.set_wrap(ed.word_wrap)
+                page.toolbar.setVisible(ed.show_toolbar)
 
     def _toggle_word_wrap(self, checked: bool) -> None:
         self.settings.editor.word_wrap = checked
+        self._apply_editor_settings()
+
+    def _toggle_document_toolbar(self, checked: bool) -> None:
+        self.settings.editor.show_toolbar = checked
         self._apply_editor_settings()
 
     def _toggle_whitespace(self, checked: bool) -> None:
@@ -1152,6 +1377,14 @@ class MainWindow(QMainWindow):
 
     def _toggle_line_numbers(self, checked: bool) -> None:
         self.settings.editor.show_line_numbers = checked
+        self._apply_editor_settings()
+
+    def _toggle_rainbow_brackets(self, checked: bool) -> None:
+        self.settings.editor.rainbow_brackets = checked
+        self._apply_editor_settings()
+
+    def _toggle_rainbow_indentation(self, checked: bool) -> None:
+        self.settings.editor.rainbow_indentation = checked
         self._apply_editor_settings()
 
     def open_preferences(self) -> None:
@@ -1165,8 +1398,10 @@ class MainWindow(QMainWindow):
         self.settings.general = settings.general
         self.settings.editor = settings.editor
         self.settings.appearance = settings.appearance
+        file_dialogs.use_native_dialogs = settings.general.native_file_dialogs
         for tab in self.all_tabs():
             tab.apply_settings(self.settings.editor)
+            tab.schedule_check()
         self._sync_view_actions()
         self.apply_appearance()
         self._sync_ui_language_actions()
@@ -1189,7 +1424,7 @@ class MainWindow(QMainWindow):
         self.settings.save()
         self._sync_ui_language_actions()
         if language != current_language():
-            QMessageBox.information(self, APP_NAME, tr("Restart Forge to use the new language."))
+            message_box.information(self, APP_NAME, tr("Restart Forge to use the new language."))
 
     def set_document_language(self, language: Language) -> None:
         tab = self.current_tab()
@@ -1197,6 +1432,7 @@ class MainWindow(QMainWindow):
             tab.set_language(language)
             self.status.show_tab(tab)
             self._sync_language_menu(tab)
+            self._update_view_switch(tab)
 
     # Edit commands ---------------------------------------------------------
 
@@ -1276,6 +1512,8 @@ class MainWindow(QMainWindow):
         self._action(edit_menu, tr("&Delete"), self._on_editor("removeSelectedText"))
         edit_menu.addSeparator()
         self._action(edit_menu, tr("Select &All"), self._on_editor("selectAll"), sk.SelectAll)
+        complete = self._action(edit_menu, tr("Complete &Word"), self._on_editor("complete_word"))
+        complete.setShortcuts([QKeySequence(k) for k in COMPLETE_WORD_SHORTCUTS])
         edit_menu.addSeparator()
         self._eol_menu = EolMenu(tr("&EOL Conversion"), self)
         self._eol_menu.eol_chosen.connect(self.convert_eol)
@@ -1327,6 +1565,37 @@ class MainWindow(QMainWindow):
                 view_menu, numbers_text, ed.show_line_numbers, self._toggle_line_numbers
             ),
         }
+        self._view_actions["toolbar"] = self._checkable(
+            view_menu,
+            tr("Document &Toolbar"),
+            ed.show_toolbar,
+            self._toggle_document_toolbar,
+        )
+        view_menu.addSeparator()
+        self._view_actions["brackets"] = self._checkable(
+            view_menu, tr("Rainbow &Brackets"), ed.rainbow_brackets, self._toggle_rainbow_brackets
+        )
+        self._view_actions["indent"] = self._checkable(
+            view_menu,
+            tr("Rainbow In&dentation"),
+            ed.rainbow_indentation,
+            self._toggle_rainbow_indentation,
+        )
+        view_menu.addSeparator()
+        mode_menu = view_menu.addMenu(tr("Document &View"))
+        assert mode_menu is not None
+        mode_group = QActionGroup(self)
+        self._view_mode_actions: dict[str, QAction] = {}
+        mode_labels = {"text": tr("&Text"), "split": tr("&Split"), "preview": tr("&Preview")}
+        for mode, label in mode_labels.items():
+            action = QAction(label, mode_group)
+            action.setCheckable(True)
+            action.setMenuRole(QAction.MenuRole.NoRole)
+            action.triggered.connect(lambda _c=False, m=mode: self._set_current_view_mode(m))
+            mode_menu.addAction(action)
+            self._view_mode_actions[mode] = action
+        mode_menu.addSeparator()
+        self._action(mode_menu, tr("Toggle P&review"), self.toggle_preview, "Ctrl+Shift+V")
         view_menu.addSeparator()
         self._action(view_menu, tr("Zoom &In"), lambda: self._zoom(1), sk.ZoomIn)
         self._action(view_menu, tr("Zoom &Out"), lambda: self._zoom(-1), sk.ZoomOut)
@@ -1393,6 +1662,10 @@ class MainWindow(QMainWindow):
             self._ui_language_actions[code] = action
         self._sync_ui_language_actions()
 
+        tools_menu = bar.addMenu(tr("T&ools"))
+        assert tools_menu is not None
+        self.extension_host.build_menus(tools_menu, search_menu)
+
         help_menu = bar.addMenu(tr("&Help"))
         assert help_menu is not None
         about_role = QAction.MenuRole.AboutRole
@@ -1418,7 +1691,7 @@ class MainWindow(QMainWindow):
             encoding_menu.set_current(tab.doc.encoding)
 
     def show_about(self) -> None:
-        QMessageBox.about(
+        message_box.about(
             self,
             tr("About Forge"),
             tr(

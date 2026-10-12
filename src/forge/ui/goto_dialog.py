@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QDialog,
     QDialogButtonBox,
     QLabel,
     QSpinBox,
@@ -12,14 +11,13 @@ from PyQt6.QtWidgets import (
 )
 
 from forge.i18n.translator import tr
+from forge.ui.framed_dialog import FramedDialog
 
 
-class GoToLineDialog(QDialog):
+class GoToLineDialog(FramedDialog):
     def __init__(self, current: int, last: int, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(tr("Go to Line"))
-        self.setModal(True)
-        layout = QVBoxLayout(self)
+        super().__init__(tr("Go to Line"), parent)
+        layout = QVBoxLayout(self.body)
         layout.setContentsMargins(20, 18, 20, 16)
         layout.setSpacing(10)
         layout.addWidget(QLabel(tr("Line number (1 - {last}):", last=last), self))

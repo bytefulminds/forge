@@ -57,3 +57,10 @@ def test_no_hex_colors_outside_themes() -> None:
             if is_text and HEX.search(node.value):
                 offenders.append(f"{file.relative_to(SRC)}:{node.lineno}")
     assert offenders == []
+
+
+@ALL_THEMES
+def test_rainbow_colors_are_readable(theme: Theme) -> None:
+    assert len(theme.rainbow) >= 3
+    for color in theme.rainbow:
+        assert contrast_ratio(color, theme.editor_bg) >= AA, f"{theme.id} {color}"

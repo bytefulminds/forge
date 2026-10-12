@@ -33,6 +33,7 @@ from PyQt6.Qsci import (
 from PyQt6.QtGui import QColor, QFont
 
 from forge.editor.commenting import CommentStyle
+from forge.editor.csv_lexer import CsvLexer
 from forge.themes.theme import SyntaxColors, Theme
 
 NO_COMMENT = CommentStyle()
@@ -88,6 +89,7 @@ _LANGUAGES: tuple[Language, ...] = (
         "bash", "Shell", QsciLexerBash, (".sh", ".bash", ".zsh", ".fish"), ".sh", CommentStyle("#")
     ),
     Language("markdown", "Markdown", QsciLexerMarkdown, (".md", ".markdown"), ".md"),
+    Language("csv", "CSV", CsvLexer, (".csv", ".tsv", ".tab"), ".csv"),
     Language("sql", "SQL", QsciLexerSQL, (".sql",), ".sql", CommentStyle("--")),
     Language(
         "cpp",
@@ -199,6 +201,9 @@ def style_lexer(lexer: QsciLexer, theme: Theme, font: QFont) -> None:
     lexer.setPaper(QColor(theme.editor_bg), -1)
     lexer.setColor(QColor(syntax.default), -1)
     lexer.setFont(font, -1)
+    if isinstance(lexer, CsvLexer):
+        lexer.apply_palette(theme.rainbow or (syntax.default,), theme.text_muted, font)
+        return
     for style in range(128):
         description = lexer.description(style)
         if not description:

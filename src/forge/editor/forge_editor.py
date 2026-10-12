@@ -5,12 +5,18 @@ from __future__ import annotations
 import re
 import sys
 
-from PyQt6.Qsci import QsciLexer, QsciScintilla
+from PyQt6.Qsci import QsciAPIs, QsciLexer, QsciScintilla
+from PyQt6.QtCore import QPoint, QTimer
 from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import QToolTip
 
+from forge.core.csvtext import detect_delimiter
 from forge.core.eol import Eol
 from forge.core.settings import EditorSettings
+from forge.editor import decorations
 from forge.editor.commenting import CommentMode, apply_comment
+from forge.editor.csv_lexer import CsvLexer
+from forge.editor.diagnostics import Diagnostic
 from forge.editor.lexers import PLAIN_TEXT, Language, style_lexer
 from forge.editor.search import HIGHLIGHT_INDICATOR
 from forge.themes.theme import Theme
@@ -23,6 +29,7 @@ _EOL_MODES = {
 
 _LINE_NUMBER_MARGIN = 0
 _FOLD_MARGIN = 2
+DECORATION_DELAY_MS = 250
 _FOLD_MARGIN_WIDTH = 14
 _Q = QsciScintilla
 # Arrow fold markers instead of the dated boxed tree.
@@ -37,6 +44,22 @@ _FOLD_MARKER_SHAPES = {
 }
 
 
+def _keyword_apis(lexer: QsciLexer) -> QsciAPIs | None:
+    """Keywords of the language as completion words (QScintilla keyword sets 1 to 9)."""
+    words: set[str] = set()
+    for keyword_set in range(1, 10):
+        keywords = lexer.keywords(keyword_set)
+        if keywords:
+            words.update(keywords.split())
+    if not words:
+        return None
+    apis = QsciAPIs(lexer)
+    for word in sorted(words):
+        apis.add(word)
+    apis.prepare()
+    return apis
+
+
 class ForgeEditor(QsciScintilla):
     def __init__(self, settings: EditorSettings, theme: Theme, parent: object = None) -> None:
         super().__init__(parent)  # type: ignore[arg-type]
@@ -44,6 +67,8 @@ class ForgeEditor(QsciScintilla):
         self._theme = theme
         self._language: Language = PLAIN_TEXT
         self._lexer: QsciLexer | None = None
+        self._csv_delimiter: str | None = None
+        self._keyword_apis: QsciAPIs | None = None
         self._large_file = False
         self._load_cancelled = False
 
@@ -79,6 +104,23 @@ class ForgeEditor(QsciScintilla):
             # that key is Go to Line.
             self.SendScintilla(_Q.SCI_CLEARCMDKEY, ord("L") + (_Q.SCMOD_CTRL << 16))
         self.linesChanged.connect(self._update_line_number_width)
+
+        self._diagnostic: Diagnostic | None = None
+        self._diagnostic_range: tuple[int, int] | None = None
+        self._decor_timer = QTimer(self)
+        self._decor_timer.setSingleShot(True)
+        self._decor_timer.setInterval(DECORATION_DELAY_MS)
+        self._decor_timer.timeout.connect(self.refresh_decorations)
+        self.textChanged.connect(self.schedule_decorations)
+        self._brackets: list[tuple[int, int]] = []
+        self._paint_timer = QTimer(self)
+        self._paint_timer.setSingleShot(True)
+        self._paint_timer.setInterval(40)
+        self._paint_timer.timeout.connect(self.paint_decorations)
+        self.SCN_UPDATEUI.connect(self._on_update_ui)
+        self.SendScintilla(_Q.SCI_SETMOUSEDWELLTIME, 400)
+        self.SCN_DWELLSTART.connect(self._on_dwell_start)
+        self.SCN_DWELLEND.connect(lambda *_args: QToolTip.hideText())
         self.apply_settings(settings)
 
     # Configuration -------------------------------------------------------
@@ -94,6 +136,7 @@ class ForgeEditor(QsciScintilla):
 
     def apply_settings(self, settings: EditorSettings) -> None:
         self._settings = settings
+        self._apply_autocomplete()
         self.setTabWidth(settings.tab_width)
         self.setIndentationsUseTabs(not settings.use_spaces)
         self.setWrapMode(
@@ -133,9 +176,6 @@ class ForgeEditor(QsciScintilla):
         self.setCaretLineBackgroundColor(QColor(theme.caret_line))
         self.setSelectionBackgroundColor(QColor(theme.selection))
         self.resetSelectionForegroundColor()
-        self.setMatchedBraceBackgroundColor(QColor(theme.brace_match_bg))
-        self.setMatchedBraceForegroundColor(QColor(theme.text))
-        self.setUnmatchedBraceForegroundColor(QColor(theme.error))
         self.setWhitespaceForegroundColor(QColor(theme.text_disabled))
         self.setIndentationGuidesForegroundColor(QColor(theme.indent_guide))
         # Search highlights (Find bar "highlight all").
@@ -146,6 +186,98 @@ class ForgeEditor(QsciScintilla):
         self.SendScintilla(_Q.SCI_INDICSETOUTLINEALPHA, indicator, 160)
         self.SendScintilla(_Q.SCI_INDICSETUNDER, indicator, 1)
         self._update_line_number_width()
+        decorations.setup_indicators(self, theme)
+        self.schedule_decorations()
+
+    # Autocomplete --------------------------------------------------------
+
+    def _apply_autocomplete(self) -> None:
+        """Word completion like Notepad++: words from the document plus language keywords."""
+        settings = self._settings
+        if not settings.autocomplete:
+            self.setAutoCompletionSource(_Q.AutoCompletionSource.AcsNone)
+            return
+        has_keywords = getattr(self, "_keyword_apis", None) is not None
+        self.setAutoCompletionSource(
+            _Q.AutoCompletionSource.AcsAll if has_keywords else _Q.AutoCompletionSource.AcsDocument
+        )
+        self.setAutoCompletionThreshold(max(1, settings.autocomplete_threshold))
+        self.setAutoCompletionCaseSensitivity(False)
+        self.setAutoCompletionReplaceWord(False)
+        self.setAutoCompletionUseSingle(_Q.AutoCompletionUseSingle.AcusNever)
+
+    def complete_word(self) -> None:
+        """Show completions now (Ctrl+Space / Ctrl+Enter), even below the threshold."""
+        self.autoCompleteFromAll()
+
+    # Decorations ---------------------------------------------------------
+
+    def schedule_decorations(self) -> None:
+        self._decor_timer.start()
+
+    def refresh_decorations(self) -> None:
+        """Recompute bracket levels and repaint (debounced while typing)."""
+        enabled = not self._large_file
+        self._brackets = (
+            decorations.compute_brackets(self, self._lexer)
+            if enabled and self._settings.rainbow_brackets
+            else []
+        )
+        self.paint_decorations()
+
+    def paint_decorations(self) -> None:
+        """Paint the visible part only; scrolling repaints (cheap)."""
+        enabled = not self._large_file
+        decorations.paint_window(
+            self,
+            self._brackets,
+            self._settings.tab_width,
+            enabled and self._settings.rainbow_brackets,
+            enabled and self._settings.rainbow_indentation,
+        )
+
+    def _on_update_ui(self, updated: int) -> None:
+        if updated & _Q.SC_UPDATE_V_SCROLL:
+            self._paint_timer.start()
+
+    @property
+    def diagnostic(self) -> Diagnostic | None:
+        return self._diagnostic
+
+    def set_diagnostic(self, diagnostic: Diagnostic | None) -> None:
+        """Underline ``diagnostic`` with a red squiggle (or clear it)."""
+        length = int(self.SendScintilla(_Q.SCI_GETLENGTH))
+        self.SendScintilla(_Q.SCI_SETINDICATORCURRENT, decorations.DIAGNOSTIC)
+        self.SendScintilla(_Q.SCI_INDICATORCLEARRANGE, 0, length)
+        self._diagnostic = diagnostic
+        self._diagnostic_range = None
+        if diagnostic is None or length == 0:
+            return
+        start, size = self._diagnostic_span(diagnostic)
+        self._diagnostic_range = (start, start + size)
+        self.SendScintilla(_Q.SCI_INDICATORFILLRANGE, start, size)
+
+    def _diagnostic_span(self, diagnostic: Diagnostic) -> tuple[int, int]:
+        """Byte range to underline: the token at the error, at least one character."""
+        line = max(0, min(diagnostic.line - 1, self.lines() - 1))
+        text = str(self.text(line)).rstrip("\r\n")
+        while not text.strip() and line > 0:  # error after the end: mark the last text
+            line -= 1
+            text = str(self.text(line)).rstrip("\r\n")
+        column = max(0, min(diagnostic.column - 1, max(0, len(text) - 1)))
+        token = re.match(r"\S+", text[column:])
+        size_chars = len(token.group(0)) if token else 1
+        line_start = int(self.SendScintilla(_Q.SCI_POSITIONFROMLINE, line))
+        start = line_start + len(text[:column].encode("utf-8"))
+        size = max(1, len(text[column : column + size_chars].encode("utf-8")))
+        return start, size
+
+    def _on_dwell_start(self, position: int, x: int, y: int) -> None:
+        span = self._diagnostic_range
+        if self._diagnostic is None or span is None or position < 0:
+            return
+        if span[0] <= position <= span[1]:
+            QToolTip.showText(self.mapToGlobal(QPoint(x, y + 12)), self._diagnostic.message, self)
 
     # Language ------------------------------------------------------------
 
@@ -159,8 +291,38 @@ class ForgeEditor(QsciScintilla):
         # hundreds of megabytes is what makes editors freeze.
         use_lexer = language.lexer is not None and not self._large_file
         self._lexer = language.lexer(self) if use_lexer and language.lexer else None
+        if isinstance(self._lexer, CsvLexer) and self._csv_delimiter:
+            self._lexer.set_delimiter(self._csv_delimiter)
         self.setLexer(self._lexer)
+        self._keyword_apis = None
+        if self._lexer is not None:
+            self._keyword_apis = _keyword_apis(self._lexer)
+        self._apply_autocomplete()
         self.apply_theme(self._theme)
+        self.schedule_decorations()
+
+    # CSV -------------------------------------------------------------------
+
+    @property
+    def csv_delimiter(self) -> str:
+        """The delimiter in use: chosen by the user, or detected from the text."""
+        if isinstance(self._lexer, CsvLexer):
+            return self._lexer.delimiter
+        if self._csv_delimiter:
+            return self._csv_delimiter
+        length = min(int(self.SendScintilla(self.SCI_GETLENGTH)), 20_000)
+        sample = bytes(self.bytes(0, length).data())[:length].decode("utf-8", "replace")
+        return detect_delimiter(sample)
+
+    @property
+    def csv_delimiter_choice(self) -> str | None:
+        """The delimiter the user chose, or ``None`` for automatic detection."""
+        return self._csv_delimiter
+
+    def set_csv_delimiter(self, delimiter: str | None) -> None:
+        self._csv_delimiter = delimiter or None
+        if isinstance(self._lexer, CsvLexer):
+            self._lexer.set_delimiter(self._csv_delimiter)
 
     # Large files ---------------------------------------------------------
 

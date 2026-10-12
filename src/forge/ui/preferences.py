@@ -14,7 +14,6 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDialog,
     QDialogButtonBox,
     QFontComboBox,
     QFormLayout,
@@ -28,6 +27,7 @@ from forge.core.settings import Settings
 from forge.i18n.catalog import LANGUAGES
 from forge.i18n.translator import current_language, tr
 from forge.themes.theme import SYSTEM_THEME_ID, THEME_CHOICES
+from forge.ui.framed_dialog import FramedDialog
 
 
 def theme_label(theme_id: str) -> str:
@@ -53,22 +53,21 @@ def _section(text: str) -> QLabel:
     return label
 
 
-class PreferencesDialog(QDialog):
+class PreferencesDialog(FramedDialog):
     def __init__(
         self,
         settings: Settings,
         apply: Callable[[Settings], None],
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__(tr("Preferences"), parent)
         self.setObjectName("preferencesDialog")
-        self.setWindowTitle(tr("Preferences"))
         self._original = copy.deepcopy(settings)
         self.settings = copy.deepcopy(settings)
         self._apply = apply
         self._loading = True
 
-        layout = QVBoxLayout(self)
+        layout = QVBoxLayout(self.body)
         layout.setContentsMargins(22, 18, 22, 16)
         layout.setSpacing(10)
         # One form for all sections so labels and fields line up.
@@ -103,13 +102,29 @@ class PreferencesDialog(QDialog):
         self.show_line_numbers.setChecked(ed.show_line_numbers)
         self.highlight_line = QCheckBox(tr("Highlight the current line"), self)
         self.highlight_line.setChecked(ed.highlight_current_line)
+        self.rainbow_brackets = QCheckBox(tr("Color matching brackets (rainbow)"), self)
+        self.rainbow_brackets.setChecked(ed.rainbow_brackets)
+        self.rainbow_indentation = QCheckBox(tr("Color indentation levels (rainbow)"), self)
+        self.rainbow_indentation.setChecked(ed.rainbow_indentation)
+        self.check_syntax = QCheckBox(tr("Underline syntax errors while typing"), self)
+        self.check_syntax.setChecked(ed.check_syntax)
         for box in (
             self.word_wrap,
             self.show_whitespace,
             self.show_line_numbers,
             self.highlight_line,
+            self.rainbow_brackets,
+            self.rainbow_indentation,
+            self.check_syntax,
         ):
             form.addRow("", box)
+
+        self.autocomplete = QCheckBox(tr("Suggest words while typing"), self)
+        self.autocomplete.setChecked(ed.autocomplete)
+        self.autocomplete_threshold = _spin(1, 10, ed.autocomplete_threshold, self)
+        self.autocomplete_threshold.setSuffix(tr(" characters"))
+        form.addRow(tr("Autocomplete"), self.autocomplete)
+        form.addRow(tr("Suggest after"), self.autocomplete_threshold)
 
         # Appearance ----------------------------------------------------------
         form.addRow(_section(tr("Appearance")))
@@ -137,6 +152,12 @@ class PreferencesDialog(QDialog):
         self.remember_session = QCheckBox(tr("Remember open tabs and unsaved text"), self)
         self.remember_session.setChecked(self.settings.general.remember_session)
         form.addRow("", self.remember_session)
+        self.native_dialogs = QCheckBox(tr("Use the system file dialogs"), self)
+        self.native_dialogs.setToolTip(
+            tr("Finder on macOS, GTK or KDE on Linux, instead of Forge styled dialogs")
+        )
+        self.native_dialogs.setChecked(self.settings.general.native_file_dialogs)
+        form.addRow("", self.native_dialogs)
 
         layout.addStretch(1)
         buttons = QDialogButtonBox(
@@ -149,7 +170,7 @@ class PreferencesDialog(QDialog):
         self.setMinimumWidth(480)
         self.adjustSize()
 
-        for spin in (self.font_size, self.tab_width):
+        for spin in (self.font_size, self.tab_width, self.autocomplete_threshold):
             spin.valueChanged.connect(self._changed)
         for combo in (self.font_family, self.indent, self.theme, self.language):
             combo.currentIndexChanged.connect(self._changed)
@@ -158,7 +179,12 @@ class PreferencesDialog(QDialog):
             self.show_whitespace,
             self.show_line_numbers,
             self.highlight_line,
+            self.rainbow_brackets,
+            self.rainbow_indentation,
+            self.check_syntax,
+            self.autocomplete,
             self.remember_session,
+            self.native_dialogs,
         ):
             box.toggled.connect(self._changed)
         self._loading = False
@@ -173,9 +199,15 @@ class PreferencesDialog(QDialog):
         ed.show_whitespace = self.show_whitespace.isChecked()
         ed.show_line_numbers = self.show_line_numbers.isChecked()
         ed.highlight_current_line = self.highlight_line.isChecked()
+        ed.rainbow_brackets = self.rainbow_brackets.isChecked()
+        ed.rainbow_indentation = self.rainbow_indentation.isChecked()
+        ed.check_syntax = self.check_syntax.isChecked()
+        ed.autocomplete = self.autocomplete.isChecked()
+        ed.autocomplete_threshold = self.autocomplete_threshold.value()
         self.settings.appearance.theme = str(self.theme.currentData())
         self.settings.appearance.language = str(self.language.currentData())
         self.settings.general.remember_session = self.remember_session.isChecked()
+        self.settings.general.native_file_dialogs = self.native_dialogs.isChecked()
 
     def _changed(self) -> None:
         if self._loading:

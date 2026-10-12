@@ -101,7 +101,59 @@ QToolButton#statusSegment {{
 }}
 QToolButton#statusSegment:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 QToolButton#statusSegment:pressed {{ background: {c.pressed_bg}; }}
+QToolButton#statusProblem {{
+    color: {c.error}; background: transparent; border: none; border-radius: 6px;
+    padding: 2px 8px; font-size: 12px;
+}}
+QToolButton#statusProblem:hover {{ background: {c.hover_bg}; }}
 QToolButton#statusSegment::menu-indicator {{ image: none; width: 0; }}
+
+QDockWidget {{ color: {c.text_muted}; font-size: 12px; }}
+QDockWidget::title {{
+    background: {c.chrome_bg}; padding: 6px 10px; border-top: 1px solid {c.border};
+}}
+QDockWidget::close-button, QDockWidget::float-button {{
+    border: none; background: transparent; padding: 2px; border-radius: 4px;
+}}
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {{ background: {c.hover_bg}; }}
+QWidget#toolPanel {{ background: {c.elevated_bg}; }}
+QTreeWidget, QListWidget {{
+    background: {c.editor_bg}; color: {c.text}; border: 1px solid {c.border};
+    border-radius: 6px; outline: 0;
+}}
+QTreeWidget::item, QListWidget::item {{ padding: 2px 4px; }}
+QTreeWidget::item:selected, QListWidget::item:selected {{
+    background: {c.menu_selected_bg}; color: {c.text};
+}}
+QTreeWidget::item:hover, QListWidget::item:hover {{ background: {c.hover_bg}; }}
+QHeaderView::section {{
+    background: {c.chrome_bg}; color: {c.text_muted}; border: none;
+    border-bottom: 1px solid {c.border}; padding: 4px 8px; font-size: 12px;
+}}
+QLabel#compareTitle {{ color: {c.text_muted}; font-size: 12px; }}
+QSplitter::handle {{ background: {c.border}; width: 1px; }}
+
+QWidget#tabCorner {{ background: {c.chrome_bg}; }}
+QWidget#documentToolbar {{
+    background: {c.editor_bg}; border-bottom: 1px solid {c.border};
+}}
+QToolButton#docToolButton {{
+    background: transparent; border: none; border-radius: 5px;
+    padding: 3px; min-width: 18px; min-height: 18px;
+}}
+QToolButton#docToolButton:hover {{ background: {c.hover_bg}; }}
+QToolButton#docToolButton:pressed {{ background: {c.menu_selected_bg}; }}
+QToolButton#docToolButton:checked {{ background: {c.menu_selected_bg}; }}
+QFrame#docToolSeparator {{ background: {c.border}; margin: 0 4px; }}
+QTextBrowser#markdownPreview {{ background: {c.editor_bg}; border: none; }}
+QTableView#csvTable {{
+    background: {c.editor_bg}; alternate-background-color: {c.caret_line};
+    gridline-color: {c.border}; border: none; color: {c.text};
+    selection-background-color: {c.selection}; selection-color: {c.text};
+}}
+QTableView#csvTable QTableCornerButton::section {{ background: {c.chrome_bg}; border: none; }}
+QTreeWidget#jsonTree {{ border: none; border-radius: 0; }}
+QLabel#previewMessage {{ color: {c.text_muted}; background: {c.editor_bg}; }}
 
 QFrame#findBar {{ background: {c.elevated_bg}; border-top: 1px solid {c.border}; }}
 QFrame#findBar QLineEdit[invalid="true"] {{ border-color: {c.error}; }}
@@ -138,6 +190,30 @@ QLabel#prefNote {{ color: {c.warning}; font-size: 12px; }}
 QCheckBox {{ spacing: 8px; }}
 
 QDialog, QMessageBox {{ background: {c.elevated_bg}; }}
+QFrame#dialogFrame {{ background: {c.elevated_bg}; border: 1px solid {c.border_strong}; }}
+QWidget#dialogTitleBar {{ background: {c.chrome_bg}; border-bottom: 1px solid {c.border}; }}
+QLabel#dialogTitle {{ color: {c.text_muted}; font-size: 12px; font-weight: 600; }}
+QWidget#dialogBody {{ background: {c.elevated_bg}; }}
+QFileDialog {{ background: {c.elevated_bg}; }}
+QFileDialog QListView, QFileDialog QTreeView {{
+    background: {c.editor_bg}; color: {c.text}; border: 1px solid {c.border};
+    border-radius: 6px; outline: none;
+    selection-background-color: {c.menu_selected_bg}; selection-color: {c.text};
+}}
+QFileDialog QListView#sidebar {{ background: {c.chrome_bg}; padding: 4px; }}
+QFileDialog QListView::item, QFileDialog QTreeView::item {{ padding: 3px 4px; }}
+QFileDialog QListView::item:hover, QFileDialog QTreeView::item:hover {{
+    background: {c.hover_bg};
+}}
+QFileDialog QListView::item:selected, QFileDialog QTreeView::item:selected {{
+    background: {c.menu_selected_bg}; color: {c.text};
+}}
+QFileDialog QToolButton {{
+    background: transparent; border: none; border-radius: 5px; padding: 3px;
+}}
+QFileDialog QToolButton:hover {{ background: {c.hover_bg}; }}
+QFileDialog QLabel {{ color: {c.text_muted}; }}
+QSizeGrip {{ width: 12px; height: 12px; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};
     border-radius: 6px; padding: 6px 16px; min-height: 18px; font-weight: 500;

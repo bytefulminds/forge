@@ -10,6 +10,13 @@ import pytest
 
 # Must be set before Qt is imported anywhere.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# The rich Markdown preview (Qt WebEngine) has its own tests; the others use
+# the basic preview so they stay fast and need no browser engine.
+os.environ.setdefault("FORGE_BASIC_MARKDOWN", "1")
+
+from PyQt6.QtCore import QCoreApplication, Qt
+
+QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
 
 @pytest.fixture(autouse=True)
