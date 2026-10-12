@@ -1,0 +1,53 @@
+# ------------------------------------------------------------
+# Forge .gitignore
+# Only files needed to build and run the app belong in the repo.
+# ------------------------------------------------------------
+
+# Design source files and working material (local only)
+_assets/
+_to_delete/
+
+# AI assistant / build prompt files (local only)
+PROMPT.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.mcp.json
+_notes/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build and packaging output
+build/
+dist/
+*.AppImage
+*.dmg
+AppDir/
+
+# Compiled translations (generated from .ts files)
+*.qm
+
+# Logs and local runtime data
+*.log
+
+# OS and editor files
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
