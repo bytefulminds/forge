@@ -1,0 +1,83 @@
+[project]
+name = "forge-editor"
+version = "0.1.0"
+description = "Forge: a fast, lightweight text editor for macOS and Linux in the spirit of Notepad++."
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = "==3.12.13"
+# Every version is pinned exactly so builds are identical on every machine.
+# Transitive dependencies are pinned in uv.lock.
+dependencies = [
+    "PyQt6==6.11.0",
+    "PyQt6-Qt6==6.11.2",
+    "PyQt6-sip==13.13.0",
+    "PyQt6-QScintilla==2.14.1",
+    "platformdirs==4.13.0",
+    "tomli-w==1.2.0",
+    "charset-normalizer==3.5.2",
+    "PyYAML==6.0.3",
+    "lxml==6.1.3",
+]
+
+[project.scripts]
+forge = "forge.app:main"
+
+[dependency-groups]
+dev = [
+    "ruff==0.17.0",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+    "pytest-qt==4.5.0",
+    "pyinstaller==6.22.3",
+    "types-PyYAML==6.0.12.20250915",
+    "lxml-stubs==0.5.1",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forge"]
+
+[tool.uv]
+# Minimum uv version. The installed packages are pinned by uv.lock, not by the uv version.
+required-version = ">=0.11.32"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "TID"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"forge.ui".msg = "Built-in tools may only use forge.extensions.api"
+"forge.editor".msg = "Built-in tools may only use forge.extensions.api"
+
+[tool.ruff.lint.per-file-ignores]
+# The banned-api rule only applies to built-in tools (src/forge/tools/**).
+"!src/forge/tools/**" = ["TID251"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+packages = ["forge"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["forge.core.*", "forge.themes.*", "forge.i18n.*"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["PyQt6.Qsci"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyqt6"

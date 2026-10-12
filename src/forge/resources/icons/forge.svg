@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Placeholder icon, to be replaced by the final Forge icon. -->
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="#0B1A33"/>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#1E2A3B" stroke-width="8"/>
+  <path d="M84 64h96v28h-64v28h52v28h-52v44H84z" fill="#4DA3FF"/>
+  <circle cx="184" cy="184" r="16" fill="#B7FF4A"/>
+</svg>

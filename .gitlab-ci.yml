@@ -1,0 +1,60 @@
+# Forge CI pipeline.
+# Phase (a): lint, typecheck and test. Build and release stages follow in phase (f).
+#
+# Runner tags are variables so they can be changed without editing jobs.
+# The jobs expect a Docker executor; the image pins Python exactly.
+
+variables:
+  LINUX_RUNNER_TAG: "linux"
+  MACOS_RUNNER_TAG: "macos"
+  PYTHON_IMAGE: "python:3.12.13-slim-bookworm"
+  UV_VERSION: "0.11.32"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  UV_FROZEN: "1"
+  QT_QPA_PLATFORM: "offscreen"
+
+stages:
+  - lint
+  - typecheck
+  - test
+
+default:
+  image: $PYTHON_IMAGE
+  tags:
+    - $LINUX_RUNNER_TAG
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .uv-cache
+  before_script:
+    - pip install --quiet "uv==${UV_VERSION}"
+    - uv sync --frozen
+
+lint:
+  stage: lint
+  script:
+    - uv run ruff check .
+    - uv run ruff format --check .
+
+typecheck:
+  stage: typecheck
+  script:
+    - uv run mypy
+
+test:
+  stage: test
+  before_script:
+    # Runtime libraries Qt needs for the headless (offscreen) platform.
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends
+      libgl1 libegl1 libxkbcommon0 libfontconfig1 libglib2.0-0 libdbus-1-3 > /dev/null
+    - pip install --quiet "uv==${UV_VERSION}"
+    - uv sync --frozen
+  script:
+    - uv run pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml

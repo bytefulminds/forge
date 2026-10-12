@@ -21,7 +21,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-.python-version
+.uv-cache/
 
 # Tooling caches
 .mypy_cache/
@@ -29,6 +29,7 @@ venv/
 .pytest_cache/
 .coverage
 coverage.xml
+report.xml
 htmlcov/
 
 # Build and packaging output
@@ -37,9 +38,6 @@ dist/
 *.AppImage
 *.dmg
 AppDir/
-
-# Compiled translations (generated from .ts files)
-*.qm
 
 # Logs and local runtime data
 *.log
