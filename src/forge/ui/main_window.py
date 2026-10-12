@@ -48,6 +48,7 @@ from forge.core.session import save_session as write_session
 from forge.core.settings import Settings
 from forge.core.tasks import run_in_background
 from forge.core.watcher import FileWatcher
+from forge.editor import search
 from forge.editor.commenting import CommentMode
 from forge.editor.lexers import (
     PLAIN_TEXT,
@@ -63,7 +64,9 @@ from forge.themes.theme import THEMES, Theme, get_theme
 from forge.ui.appearance import apply_theme as apply_app_theme
 from forge.ui.appearance import round_popup_menus
 from forge.ui.document_tab import DocumentTab
+from forge.ui.find_bar import FindBar
 from forge.ui.format_menus import EncodingMenu, EolMenu
+from forge.ui.goto_dialog import GoToLineDialog
 from forge.ui.language_picker import LanguageMenu
 from forge.ui.notice_bar import Notice, NoticeBar
 from forge.ui.status_bar import ForgeStatusBar
@@ -91,6 +94,12 @@ SAVE_ALL_SHORTCUT = "Ctrl+Alt+S" if IS_MAC else "Ctrl+Shift+S"
 # physical Control key is used there ("Meta" in Qt), plus the common Cmd+/.
 TOGGLE_COMMENT_SHORTCUTS = ["Meta+Q", "Ctrl+/"] if IS_MAC else ["Ctrl+Q", "Ctrl+/"]
 # Notepad++ quits with Alt+F4 on Linux; macOS keeps Cmd+Q.
+# Search: Notepad++ keys on Linux. On macOS Cmd+H hides the app and Cmd+G is
+# "find next" everywhere, so replace and go to line move (Cmd+Option+F, Cmd+L).
+FIND_NEXT_SHORTCUTS = ["F3", "Ctrl+G"] if IS_MAC else ["F3"]
+FIND_PREVIOUS_SHORTCUTS = ["Shift+F3", "Ctrl+Shift+G"] if IS_MAC else ["Shift+F3"]
+REPLACE_SHORTCUT = "Ctrl+Alt+F" if IS_MAC else "Ctrl+H"
+GO_TO_LINE_SHORTCUT = "Ctrl+L" if IS_MAC else "Ctrl+G"
 EXIT_SHORTCUT: Shortcut = QKeySequence.StandardKey.Quit if IS_MAC else "Alt+F4"
 
 
@@ -141,7 +150,9 @@ class MainWindow(QMainWindow):
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
         central_layout.addWidget(self.tabs)
-        # Notices appear below the editor, right above the status bar.
+        # Find bar and notices sit below the editor, right above the status bar.
+        self.find_bar = FindBar(self.current_tab, lambda text: self.status.showMessage(text, 4000))
+        central_layout.addWidget(self.find_bar)
         central_layout.addWidget(self.notice_bar)
         self.setCentralWidget(central)
         self.watcher = FileWatcher(self)
@@ -186,6 +197,7 @@ class MainWindow(QMainWindow):
         self.status = ForgeStatusBar(
             self._language_menu, self._eol_status_menu, self._encoding_status_menu, self
         )
+        self.status.position.clicked.connect(self.go_to_line)
         self.setStatusBar(self.status)
 
         self.setAcceptDrops(True)
@@ -344,6 +356,7 @@ class MainWindow(QMainWindow):
         self._update_window_title()
         self._sync_language_menu(tab)
         self._show_notice_for(tab)
+        self.find_bar.attach(tab)
         if tab is not None:
             tab.setFocus()
 
@@ -1028,6 +1041,24 @@ class MainWindow(QMainWindow):
         self.status.show_tab(tab)
         self._sync_menus(tab)
 
+    # Search ----------------------------------------------------------------
+
+    def open_find(self) -> None:
+        self.find_bar.open_bar(replace=False)
+
+    def open_replace(self) -> None:
+        self.find_bar.open_bar(replace=True)
+
+    def go_to_line(self) -> None:
+        tab = self.current_tab()
+        if tab is None:
+            return
+        line, _ = tab.getCursorPosition()
+        dialog = GoToLineDialog(line + 1, tab.lines(), self)
+        if dialog.exec() == GoToLineDialog.DialogCode.Accepted:
+            search.go_to_line(tab, dialog.line)
+        tab.setFocus()
+
     # Drag and drop on the window (tab bar, empty areas) -------------------
 
     def dragEnterEvent(self, event: QDragEnterEvent | None) -> None:
@@ -1200,6 +1231,17 @@ class MainWindow(QMainWindow):
             "Ctrl+Shift+K",
         )
 
+        search_menu = bar.addMenu(tr("&Search"))
+        assert search_menu is not None
+        self._action(search_menu, tr("&Find..."), self.open_find, sk.Find)
+        find_next = self._action(search_menu, tr("Find &Next"), self.find_bar.find_next)
+        find_next.setShortcuts([QKeySequence(k) for k in FIND_NEXT_SHORTCUTS])
+        find_previous = self._action(search_menu, tr("Find &Previous"), self.find_bar.find_previous)
+        find_previous.setShortcuts([QKeySequence(k) for k in FIND_PREVIOUS_SHORTCUTS])
+        self._action(search_menu, tr("&Replace..."), self.open_replace, REPLACE_SHORTCUT)
+        search_menu.addSeparator()
+        self._action(search_menu, tr("&Go To..."), self.go_to_line, GO_TO_LINE_SHORTCUT)
+
         view_menu = bar.addMenu(tr("&View"))
         assert view_menu is not None
         ed = self.settings.editor
@@ -1232,7 +1274,7 @@ class MainWindow(QMainWindow):
         self._language_menu.language_chosen.connect(self.set_document_language)
         bar.addMenu(self._language_menu)
 
-        settings_menu = bar.addMenu(tr("&Settings"))
+        settings_menu = bar.addMenu(tr("Se&ttings"))
         assert settings_menu is not None
         theme_menu = settings_menu.addMenu(tr("&Theme"))
         assert theme_menu is not None

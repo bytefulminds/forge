@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QLabel, QMenu, QStatusBar, QToolButton, QWidget
+from PyQt6.QtWidgets import QFrame, QMenu, QStatusBar, QToolButton, QWidget
 
 from forge.editor.lexers import PLAIN_TEXT
 from forge.i18n.translator import tr
@@ -37,7 +37,11 @@ class ForgeStatusBar(QStatusBar):
     ) -> None:
         super().__init__(parent)
         self.setSizeGripEnabled(False)
-        self.position = QLabel()
+        # Clicking the position opens Go to Line, as in Notepad++.
+        self.position = QToolButton()
+        self.position.setObjectName("statusSegment")
+        self.position.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.position.setToolTip(tr("Go to line"))
 
         # Clickable segments open the same menus as the menu bar.
         self.language = _segment(language_menu, tr("Change the language of this document"))
@@ -53,7 +57,7 @@ class ForgeStatusBar(QStatusBar):
 
     def show_tab(self, tab: DocumentTab | None) -> None:
         if tab is None:
-            self.position.clear()
+            self.position.setText("")
             self.language.setText("")
             self.eol.setText("")
             self.encoding.setText("")

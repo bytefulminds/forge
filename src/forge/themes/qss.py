@@ -95,6 +95,22 @@ QToolButton#statusSegment:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 QToolButton#statusSegment:pressed {{ background: {c.pressed_bg}; }}
 QToolButton#statusSegment::menu-indicator {{ image: none; width: 0; }}
 
+QFrame#findBar {{ background: {c.elevated_bg}; border-top: 1px solid {c.border}; }}
+QFrame#findBar QLineEdit[invalid="true"] {{ border-color: {c.error}; }}
+QToolButton#findOption, QToolButton#findNav {{
+    border: none; border-radius: 4px; background: transparent; color: {c.text_muted};
+    min-width: 26px; min-height: 24px; padding: 0 4px;
+}}
+QToolButton#findOption {{ font-family: "JetBrains Mono"; font-size: 12px; }}
+QToolButton#findNav {{ font-size: 14px; }}
+QToolButton#findOption:hover, QToolButton#findNav:hover {{
+    background: {c.hover_bg}; color: {c.text};
+}}
+QToolButton#findOption:checked {{
+    background: {c.menu_selected_bg}; color: {c.text}; border: 1px solid {c.accent};
+}}
+QLabel#findCount {{ color: {c.text_muted}; font-size: 12px; }}
+
 QFrame#noticeBar {{
     background: {c.elevated_bg}; border-top: 1px solid {c.border};
     border-left: 3px solid {c.accent};

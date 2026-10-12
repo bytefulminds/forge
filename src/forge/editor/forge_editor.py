@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 
 from PyQt6.Qsci import QsciLexer, QsciScintilla
 from PyQt6.QtGui import QColor, QFont
@@ -11,6 +12,7 @@ from forge.core.eol import Eol
 from forge.core.settings import EditorSettings
 from forge.editor.commenting import CommentMode, apply_comment
 from forge.editor.lexers import PLAIN_TEXT, Language, style_lexer
+from forge.editor.search import HIGHLIGHT_INDICATOR
 from forge.themes.theme import Theme
 
 _EOL_MODES = {
@@ -72,6 +74,10 @@ class ForgeEditor(QsciScintilla):
         self.SendScintilla(QsciScintilla.SCI_SETSCROLLWIDTH, 1)
         self.SendScintilla(QsciScintilla.SCI_SETSCROLLWIDTHTRACKING, 1)
 
+        if sys.platform == "darwin":
+            # Scintilla binds Ctrl+L (Cmd+L on macOS) to "cut line"; on macOS
+            # that key is Go to Line.
+            self.SendScintilla(_Q.SCI_CLEARCMDKEY, ord("L") + (_Q.SCMOD_CTRL << 16))
         self.linesChanged.connect(self._update_line_number_width)
         self.apply_settings(settings)
 
@@ -131,6 +137,13 @@ class ForgeEditor(QsciScintilla):
         self.setUnmatchedBraceForegroundColor(QColor(theme.error))
         self.setWhitespaceForegroundColor(QColor(theme.text_disabled))
         self.setIndentationGuidesForegroundColor(QColor(theme.indent_guide))
+        # Search highlights (Find bar "highlight all").
+        indicator = HIGHLIGHT_INDICATOR
+        self.SendScintilla(_Q.SCI_INDICSETSTYLE, indicator, _Q.INDIC_ROUNDBOX)
+        self.SendScintilla(_Q.SCI_INDICSETFORE, indicator, QColor(theme.accent))
+        self.SendScintilla(_Q.SCI_INDICSETALPHA, indicator, 70)
+        self.SendScintilla(_Q.SCI_INDICSETOUTLINEALPHA, indicator, 160)
+        self.SendScintilla(_Q.SCI_INDICSETUNDER, indicator, 1)
         self._update_line_number_width()
 
     # Language ------------------------------------------------------------

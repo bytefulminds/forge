@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 
@@ -402,3 +403,73 @@ def test_large_file_loads_in_background_without_highlighting(
     assert tab.notice is not None and tab.notice.kind == "info"
     window.notice_bar.buttons[0].click()  # Turn Highlighting On
     assert tab.lexer() is not None
+
+
+def test_find_bar_incremental_search_and_replace_all(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("alpha beta\nbeta gamma\nBETA\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    window.open_find()
+    bar = window.find_bar
+    assert bar.isVisibleTo(window)
+    bar.find_edit.setText("beta")
+    bar.refresh(move=True)
+    assert tab.selectedText() == "beta"
+    assert bar.count.text() == "1 of 3"
+    bar.find_next()
+    assert bar.count.text() == "2 of 3"
+    bar.match_case.setChecked(True)
+    bar.refresh()
+    assert "2" in bar.count.text()
+
+    window.open_replace()
+    bar.find_edit.setText("beta")
+    bar.replace_edit.setText("delta")
+    bar.replace_everything()
+    assert tab.text() == "alpha delta\ndelta gamma\nBETA\n"
+    tab.undo()
+    assert tab.text() == "alpha beta\nbeta gamma\nBETA\n"
+
+
+def test_find_bar_flags_invalid_regex(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    tab.setText("abc")
+    window.open_find()
+    window.find_bar.regex.setChecked(True)
+    window.find_bar.find_edit.setText("(abc")
+    window.find_bar.refresh()
+    assert window.find_bar.find_edit.property("invalid") == "true"
+
+
+def test_find_bar_prefills_selection_and_escape_closes(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    window.show()
+    tab = window.current_tab()
+    assert tab is not None
+    tab.setText("hello world")
+    tab.setSelection(0, 6, 0, 11)
+    window.open_find()
+    assert window.find_bar.find_edit.text() == "world"
+    qtbot.keyClick(window.find_bar.find_edit, Qt.Key.Key_Escape)
+    assert window.find_bar.isHidden()
+
+
+def test_go_to_line_dialog(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.ui.goto_dialog import GoToLineDialog
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    tab.setText("\n".join(f"line {i}" for i in range(1, 51)))
+
+    def fake_exec(dialog: GoToLineDialog) -> int:
+        dialog.spin.setValue(42)
+        return GoToLineDialog.DialogCode.Accepted.value
+
+    monkeypatch.setattr(GoToLineDialog, "exec", fake_exec)
+    window.go_to_line()
+    assert tab.getCursorPosition() == (41, 0)
