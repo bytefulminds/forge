@@ -15,13 +15,19 @@ from forge.core import paths
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_FONT = "Menlo" if sys.platform == "darwin" else "Monospace"
+# Bundled with Forge (see forge/resources/fonts).
+_DEFAULT_FONT = "JetBrains Mono"
+_DEFAULT_FONT_SIZE = 13 if sys.platform == "darwin" else 10
+
+# Bump when a default changes in a way that should replace values saved by
+# older versions (see _migrate).
+SCHEMA_VERSION = 2
 
 
 @dataclass
 class EditorSettings:
     font_family: str = _DEFAULT_FONT
-    font_size: int = 13
+    font_size: int = _DEFAULT_FONT_SIZE
     tab_width: int = 4
     use_spaces: bool = True
     word_wrap: bool = False
@@ -37,9 +43,17 @@ class AppearanceSettings:
 
 
 @dataclass
+class WindowSettings:
+    # Base64 encoded QMainWindow.saveGeometry(); empty means "use the default size".
+    geometry: str = ""
+
+
+@dataclass
 class Settings:
     editor: EditorSettings = field(default_factory=EditorSettings)
     appearance: AppearanceSettings = field(default_factory=AppearanceSettings)
+    window: WindowSettings = field(default_factory=WindowSettings)
+    schema: int = SCHEMA_VERSION
 
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:
@@ -51,15 +65,27 @@ class Settings:
         except (OSError, tomllib.TOMLDecodeError):
             log.exception("Could not read %s, using defaults", path)
             return cls()
+        _migrate(raw)
         return cls(
             editor=_build(EditorSettings, raw.get("editor", {})),
             appearance=_build(AppearanceSettings, raw.get("appearance", {})),
+            window=_build(WindowSettings, raw.get("window", {})),
         )
 
     def save(self, path: Path | None = None) -> None:
         path = path or paths.settings_file()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(tomli_w.dumps(asdict(self)), encoding="utf-8")
+
+
+def _migrate(raw: dict[str, Any]) -> None:
+    """Drop values written by older versions whose defaults have changed."""
+    if raw.get("schema", 1) < 2:
+        # v1 saved the platform monospace font; v2 bundles JetBrains Mono.
+        editor = raw.get("editor")
+        if isinstance(editor, dict):
+            editor.pop("font_family", None)
+            editor.pop("font_size", None)
 
 
 def _build[T](cls: type[T], raw: Any) -> T:

@@ -32,3 +32,12 @@ def test_corrupt_or_wrong_types_fall_back(forge_home: Path) -> None:
 
     file.write_text("this is [not toml")
     assert Settings.load() == Settings()
+
+
+def test_v1_font_settings_are_migrated(forge_home: Path) -> None:
+    paths.settings_file().write_text(
+        '[editor]\nfont_family = "Menlo"\nfont_size = 13\ntab_width = 2\n'
+    )
+    loaded = Settings.load()
+    assert loaded.editor.font_family == "JetBrains Mono"
+    assert loaded.editor.tab_width == 2

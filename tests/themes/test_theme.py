@@ -12,19 +12,38 @@ from forge.themes.tokens import contrast_ratio
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "forge"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
+AA = 4.5
+
+ALL_THEMES = pytest.mark.parametrize("theme", THEMES.values(), ids=lambda t: t.id)
 
 
-@pytest.mark.parametrize("theme", THEMES.values(), ids=lambda t: t.id)
+@ALL_THEMES
 def test_text_contrast_meets_wcag_aa(theme: Theme) -> None:
-    assert contrast_ratio(theme.text, theme.background) >= 4.5
-    assert contrast_ratio(theme.text, theme.surface) >= 4.5
+    for bg in (theme.editor_bg, theme.chrome_bg, theme.elevated_bg, theme.hover_bg):
+        assert contrast_ratio(theme.text, bg) >= AA
+        assert contrast_ratio(theme.text_muted, bg) >= AA, f"text_muted on {bg}"
+    assert contrast_ratio(theme.text, theme.menu_selected_bg) >= AA
+    assert contrast_ratio(theme.text, theme.selection) >= AA
 
 
-@pytest.mark.parametrize("theme", THEMES.values(), ids=lambda t: t.id)
+@ALL_THEMES
+def test_margin_and_accent_contrast(theme: Theme) -> None:
+    for bg in (theme.margin_bg, theme.caret_line):
+        assert contrast_ratio(theme.margin_text, bg) >= AA
+    assert contrast_ratio(theme.on_accent, theme.accent) >= AA
+    for color in (theme.accent, theme.error, theme.warning, theme.success):
+        assert contrast_ratio(color, theme.editor_bg) >= AA, color
+        assert contrast_ratio(color, theme.chrome_bg) >= AA, color
+    # Non-text UI component (focus ring): WCAG 1.4.11 asks for 3:1.
+    assert contrast_ratio(theme.focus, theme.editor_bg) >= 3
+
+
+@ALL_THEMES
 def test_syntax_colors_are_readable(theme: Theme) -> None:
     for f in fields(theme.syntax):
         color = getattr(theme.syntax, f.name)
-        assert contrast_ratio(color, theme.background) >= 4.5, f"{theme.id}.{f.name} {color}"
+        for bg in (theme.editor_bg, theme.caret_line):
+            assert contrast_ratio(color, bg) >= AA, f"{theme.id}.{f.name} {color} on {bg}"
 
 
 def test_no_hex_colors_outside_themes() -> None:

@@ -15,6 +15,7 @@ from forge import APP_ID, APP_NAME, __version__
 from forge.core.log import setup_logging
 from forge.core.settings import Settings
 from forge.i18n.translator import install_language, resolve_language
+from forge.ui.appearance import install_style, load_bundled_fonts
 
 log = logging.getLogger(__name__)
 
@@ -62,8 +63,10 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationVersion(__version__)
     app.setOrganizationDomain("bytefulminds.nl")
     app.setDesktopFileName(APP_ID)
-    app.setStyle("Fusion")
-    app.setWindowIcon(_app_icon())
+    load_bundled_fonts()
+    install_style(app)
+    icon = _app_icon()
+    app.setWindowIcon(icon)
 
     settings = Settings.load()
     install_language(resolve_language(settings.appearance.language))
@@ -71,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     # Imported after the language is installed so menus are built translated.
     from forge.ui.main_window import MainWindow
 
-    window = MainWindow(settings)
+    window = MainWindow(settings, icon)
     app.window = window
     window.open_paths(Path(arg) for arg in argv[1:] if not arg.startswith("-"))
     window.open_paths(app.take_pending())

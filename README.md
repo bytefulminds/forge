@@ -42,7 +42,7 @@ src/forge/
   i18n/        translation catalogs and tr()
   extensions/  internal extension API for the built-in tools (later phases)
   tools/       built-in tools: JSON, YAML, XML, Compare, Find in Files (later phases)
-  resources/   icons and translation files
+  resources/   icons, fonts and translation files
 tests/
 ```
 
@@ -68,3 +68,6 @@ Set `FORGE_HOME=/some/dir` to keep everything in one folder (used by the tests).
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).
+
+Bundled fonts: [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/),
+both under the SIL Open Font License 1.1 (license texts in `src/forge/resources/fonts/`).

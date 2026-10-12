@@ -32,7 +32,10 @@ from PyQt6.Qsci import (
 )
 from PyQt6.QtGui import QColor, QFont
 
+from forge.editor.commenting import CommentStyle
 from forge.themes.theme import SyntaxColors, Theme
+
+NO_COMMENT = CommentStyle()
 
 
 @dataclass(frozen=True)
@@ -40,54 +43,100 @@ class Language:
     id: str
     name: str
     lexer: type[QsciLexer] | None
+    extensions: tuple[str, ...] = ()
+    # Extension proposed by Save As. Empty for languages identified by file name.
+    default_extension: str = ""
+    comment: CommentStyle = NO_COMMENT
 
 
-PLAIN_TEXT = Language("text", "Normal text", None)
+PLAIN_TEXT = Language("text", "Normal text", None, (".txt", ".log", ".text"), ".txt")
 
-_LANGUAGES: list[tuple[Language, tuple[str, ...]]] = [
-    (Language("python", "Python", QsciLexerPython), (".py", ".pyw", ".pyi")),
-    (Language("json", "JSON", QsciLexerJSON), (".json", ".jsonc", ".geojson")),
-    (Language("yaml", "YAML", QsciLexerYAML), (".yaml", ".yml")),
-    (Language("xml", "XML", QsciLexerXML), (".xml", ".xsd", ".xsl", ".xslt", ".svg", ".plist")),
-    (Language("html", "HTML", QsciLexerHTML), (".html", ".htm", ".xhtml", ".vue")),
-    (Language("css", "CSS", QsciLexerCSS), (".css", ".scss", ".less")),
-    (
-        Language("javascript", "JavaScript", QsciLexerJavaScript),
+_LANGUAGES: tuple[Language, ...] = (
+    Language(
+        "python", "Python", QsciLexerPython, (".py", ".pyw", ".pyi"), ".py", CommentStyle("#")
+    ),
+    Language("json", "JSON", QsciLexerJSON, (".json", ".jsonc", ".geojson"), ".json"),
+    Language("yaml", "YAML", QsciLexerYAML, (".yaml", ".yml"), ".yaml", CommentStyle("#")),
+    Language(
+        "xml",
+        "XML",
+        QsciLexerXML,
+        (".xml", ".xsd", ".xsl", ".xslt", ".svg", ".plist"),
+        ".xml",
+        CommentStyle("", "<!--", "-->"),
+    ),
+    Language(
+        "html",
+        "HTML",
+        QsciLexerHTML,
+        (".html", ".htm", ".xhtml", ".vue"),
+        ".html",
+        CommentStyle("", "<!--", "-->"),
+    ),
+    Language(
+        "css", "CSS", QsciLexerCSS, (".css", ".scss", ".less"), ".css", CommentStyle("", "/*", "*/")
+    ),
+    Language(
+        "javascript",
+        "JavaScript",
+        QsciLexerJavaScript,
         (".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"),
+        ".js",
+        CommentStyle("//"),
     ),
-    (Language("bash", "Shell", QsciLexerBash), (".sh", ".bash", ".zsh", ".fish")),
-    (Language("markdown", "Markdown", QsciLexerMarkdown), (".md", ".markdown")),
-    (Language("sql", "SQL", QsciLexerSQL), (".sql",)),
-    (
-        Language("cpp", "C / C++", QsciLexerCPP),
+    Language(
+        "bash", "Shell", QsciLexerBash, (".sh", ".bash", ".zsh", ".fish"), ".sh", CommentStyle("#")
+    ),
+    Language("markdown", "Markdown", QsciLexerMarkdown, (".md", ".markdown"), ".md"),
+    Language("sql", "SQL", QsciLexerSQL, (".sql",), ".sql", CommentStyle("--")),
+    Language(
+        "cpp",
+        "C / C++",
+        QsciLexerCPP,
         (".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".m", ".mm"),
+        ".cpp",
+        CommentStyle("//"),
     ),
-    (Language("java", "Java", QsciLexerJava), (".java", ".kt", ".kts")),
-    (Language("csharp", "C#", QsciLexerCSharp), (".cs",)),
-    (
-        Language("properties", "Properties / INI", QsciLexerProperties),
+    Language("java", "Java", QsciLexerJava, (".java", ".kt", ".kts"), ".java", CommentStyle("//")),
+    Language("csharp", "C#", QsciLexerCSharp, (".cs",), ".cs", CommentStyle("//")),
+    Language(
+        "properties",
+        "Properties / INI",
+        QsciLexerProperties,
         (".ini", ".cfg", ".conf", ".properties", ".toml", ".env"),
+        ".ini",
+        CommentStyle("#"),
     ),
-    (Language("makefile", "Makefile", QsciLexerMakefile), (".mk", ".mak")),
-    (Language("cmake", "CMake", QsciLexerCMake), (".cmake",)),
-    (Language("diff", "Diff", QsciLexerDiff), (".diff", ".patch")),
-    (Language("batch", "Batch", QsciLexerBatch), (".bat", ".cmd")),
-    (Language("perl", "Perl", QsciLexerPerl), (".pl", ".pm")),
-    (Language("ruby", "Ruby", QsciLexerRuby), (".rb",)),
-    (Language("lua", "Lua", QsciLexerLua), (".lua",)),
-    (Language("tex", "TeX", QsciLexerTeX), (".tex", ".sty")),
-]
+    Language("makefile", "Makefile", QsciLexerMakefile, (".mk", ".mak"), comment=CommentStyle("#")),
+    Language("cmake", "CMake", QsciLexerCMake, (".cmake",), ".cmake", CommentStyle("#")),
+    Language("diff", "Diff", QsciLexerDiff, (".diff", ".patch"), ".diff"),
+    Language("batch", "Batch", QsciLexerBatch, (".bat", ".cmd"), ".bat", CommentStyle("REM")),
+    Language("perl", "Perl", QsciLexerPerl, (".pl", ".pm"), ".pl", CommentStyle("#")),
+    Language("ruby", "Ruby", QsciLexerRuby, (".rb",), ".rb", CommentStyle("#")),
+    Language("lua", "Lua", QsciLexerLua, (".lua",), ".lua", CommentStyle("--")),
+    Language("tex", "TeX", QsciLexerTeX, (".tex", ".sty"), ".tex", CommentStyle("%")),
+)
 
-_BY_EXTENSION = {ext: lang for lang, exts in _LANGUAGES for ext in exts}
+_BY_ID = {lang.id: lang for lang in (PLAIN_TEXT, *_LANGUAGES)}
+_BY_EXTENSION = {ext: lang for lang in _LANGUAGES for ext in lang.extensions}
 _BY_FILENAME = {
-    "makefile": _BY_EXTENSION[".mk"],
-    "gnumakefile": _BY_EXTENSION[".mk"],
-    "cmakelists.txt": _BY_EXTENSION[".cmake"],
-    ".bashrc": _BY_EXTENSION[".sh"],
-    ".zshrc": _BY_EXTENSION[".sh"],
-    ".profile": _BY_EXTENSION[".sh"],
-    ".gitlab-ci.yml": _BY_EXTENSION[".yml"],
+    "makefile": _BY_ID["makefile"],
+    "gnumakefile": _BY_ID["makefile"],
+    "cmakelists.txt": _BY_ID["cmake"],
+    ".bashrc": _BY_ID["bash"],
+    ".zshrc": _BY_ID["bash"],
+    ".profile": _BY_ID["bash"],
+    ".env": _BY_ID["properties"],
+    ".gitlab-ci.yml": _BY_ID["yaml"],
 }
+
+
+def language_by_id(language_id: str) -> Language:
+    return _BY_ID.get(language_id, PLAIN_TEXT)
+
+
+def is_known_filename(path: Path) -> bool:
+    return path.name.lower() in _BY_FILENAME
 
 
 def language_for_path(path: Path | None) -> Language:
@@ -100,7 +149,7 @@ def language_for_path(path: Path | None) -> Language:
 
 
 def all_languages() -> list[Language]:
-    return [PLAIN_TEXT, *sorted((lang for lang, _ in _LANGUAGES), key=lambda lang: lang.name)]
+    return [PLAIN_TEXT, *sorted(_LANGUAGES, key=lambda lang: lang.name.lower())]
 
 
 # Style descriptions from Scintilla lexers are matched against these keywords,
@@ -144,10 +193,10 @@ def role_for_description(description: str) -> str:
 
 def style_lexer(lexer: QsciLexer, theme: Theme, font: QFont) -> None:
     syntax: SyntaxColors = theme.syntax
-    lexer.setDefaultPaper(QColor(theme.background))
+    lexer.setDefaultPaper(QColor(theme.editor_bg))
     lexer.setDefaultColor(QColor(syntax.default))
     lexer.setDefaultFont(font)
-    lexer.setPaper(QColor(theme.background), -1)
+    lexer.setPaper(QColor(theme.editor_bg), -1)
     lexer.setColor(QColor(syntax.default), -1)
     lexer.setFont(font, -1)
     for style in range(128):

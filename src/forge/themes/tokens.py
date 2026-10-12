@@ -1,23 +1,27 @@
 """Forge design tokens.
 
-The six brand colors are copied from the design source
-(``_assets/color-palette.csv``, kept outside the repository). The app never
-reads that file at runtime. When the palette changes, update this file.
+The brand colors follow the Forge brand guide (``_assets/``, kept outside the
+repository). The app never reads that folder at runtime. When the brand
+palette changes, update this file.
 """
 
 from __future__ import annotations
 
+import colorsys
 from typing import Final
 
-# Brand palette
-NIGHT_BLUE: Final = "#0B1A33"  # Primary background and dark surfaces
+# Brand palette (brand guide)
+NIGHT_BLUE: Final = "#081A33"  # Primary background and dark surfaces
 SKY_BLUE: Final = "#4DA3FF"  # Primary brand color and interactive elements
 CYAN: Final = "#20D7E8"  # Secondary highlight
-LIME: Final = "#B7FF4A"  # Accent, focus and success states
-SLATE: Final = "#1E2A3B"  # Secondary surfaces and borders
+LIME: Final = "#B7FF4A"  # Accent, focus and success states (used sparingly)
 LIGHT: Final = "#E6F0FF"  # Text and light backgrounds
 
-# PLACEHOLDERS: not part of the brand palette yet, pending approval.
+# Helpers for derivations
+WHITE: Final = "#FFFFFF"
+BLACK: Final = "#000000"
+
+# PLACEHOLDERS: semantic colors not in the brand guide yet, pending approval.
 ERROR: Final = "#FF6B81"
 WARNING: Final = "#FFB547"
 
@@ -37,6 +41,18 @@ def mix(a: str, b: str, amount: float) -> str:
     ra, ga, ba = hex_to_rgb(a)
     rb, gb, bb = hex_to_rgb(b)
     return rgb_to_hex((ra + (rb - ra) * amount, ga + (gb - ga) * amount, ba + (bb - ba) * amount))
+
+
+def shade(color: str, lightness: float) -> str:
+    """Same hue and saturation as ``color`` with a new HLS ``lightness`` (0..1).
+
+    Used for light theme accents: mixing a bright hue towards navy greys it out,
+    changing only the lightness keeps it vivid.
+    """
+    r, g, b = (c / 255 for c in hex_to_rgb(color))
+    h, _, s = colorsys.rgb_to_hls(r, g, b)
+    nr, ng, nb = colorsys.hls_to_rgb(h, lightness, s)
+    return rgb_to_hex((nr * 255, ng * 255, nb * 255))
 
 
 def relative_luminance(color: str) -> float:
