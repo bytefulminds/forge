@@ -26,6 +26,32 @@ def load_text(path: Path) -> LoadedText:
     return LoadedText(text=text, encoding=encoding, eol=detect_eol(text))
 
 
+@dataclass(frozen=True)
+class LoadedBytes:
+    """A file prepared for the editor: UTF-8 bytes (Scintilla's own format)."""
+
+    utf8: bytes
+    encoding: TextEncoding
+    eol: Eol
+
+
+def load_utf8(path: Path) -> LoadedBytes:
+    """Read ``path`` and return its content as UTF-8 bytes.
+
+    Used for large files: a UTF-8 file without BOM is only validated, not
+    converted, so a 100 MB file never exists as a Python string.
+    """
+    data = path.read_bytes()
+    encoding = detect_encoding(data)
+    if encoding.codec == "utf-8" and not encoding.bom:
+        data.decode("utf-8")  # validate; raises UnicodeDecodeError if invalid
+        utf8 = data
+    else:
+        utf8 = decode(data, encoding).encode("utf-8")
+    sample = utf8[:1_000_000].decode("utf-8", errors="ignore")
+    return LoadedBytes(utf8=utf8, encoding=encoding, eol=detect_eol(sample))
+
+
 def save_text(path: Path, text: str, encoding: TextEncoding) -> None:
     """Write ``text`` to ``path`` atomically (temp file + rename).
 

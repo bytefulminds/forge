@@ -92,3 +92,33 @@ def decode(data: bytes, encoding: TextEncoding) -> str:
 
 def encode(text: str, encoding: TextEncoding) -> bytes:
     return encoding.bom_bytes() + text.encode(encoding.codec)
+
+
+# Encodings offered in the Encoding menu, in Notepad++ order.
+MENU_ENCODINGS: tuple[TextEncoding, ...] = (
+    TextEncoding(UTF8),
+    TextEncoding(UTF8, bom=True),
+    TextEncoding(UTF16_LE, bom=True),
+    TextEncoding(UTF16_BE, bom=True),
+    TextEncoding(CP1252),
+    TextEncoding(LATIN1),
+)
+
+
+def reinterpret(data: bytes, encoding: TextEncoding) -> str:
+    """Decode ``data`` as ``encoding``, skipping a matching byte order mark.
+
+    Raises UnicodeDecodeError when the bytes are not valid in that encoding.
+    """
+    bom = TextEncoding(encoding.codec, bom=True).bom_bytes()
+    if bom and data.startswith(bom):
+        data = data[len(bom) :]
+    return data.decode(encoding.codec)
+
+
+def can_encode(text: str, encoding: TextEncoding) -> bool:
+    try:
+        text.encode(encoding.codec)
+    except UnicodeEncodeError:
+        return False
+    return True

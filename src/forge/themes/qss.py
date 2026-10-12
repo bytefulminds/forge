@@ -95,6 +95,18 @@ QToolButton#statusSegment:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 QToolButton#statusSegment:pressed {{ background: {c.pressed_bg}; }}
 QToolButton#statusSegment::menu-indicator {{ image: none; width: 0; }}
 
+QFrame#noticeBar {{
+    background: {c.elevated_bg}; border-top: 1px solid {c.border};
+    border-left: 3px solid {c.accent};
+}}
+QFrame#noticeBar[kind="warning"] {{ border-left: 3px solid {c.warning}; }}
+QFrame#noticeBar QLabel {{ color: {c.text}; }}
+QToolButton#noticeDismiss {{
+    border: none; border-radius: 4px; background: transparent; color: {c.text_muted};
+    font-size: 14px; min-width: 22px; min-height: 22px;
+}}
+QToolButton#noticeDismiss:hover {{ background: {c.hover_bg}; color: {c.text}; }}
+
 QDialog, QMessageBox {{ background: {c.elevated_bg}; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};

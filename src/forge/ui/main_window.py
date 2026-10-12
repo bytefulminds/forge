@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable, Iterable
+from functools import partial
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, QEvent, QObject, QPoint, Qt, QTimer, QUrl
@@ -33,17 +34,20 @@ from PyQt6.QtWidgets import (
     QTabBar,
     QTabWidget,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from forge import APP_NAME, __version__
 from forge.core.document import Document
-from forge.core.encoding import TextEncoding
+from forge.core.encoding import TextEncoding, can_encode, reinterpret
 from forge.core.eol import Eol
-from forge.core.fileio import load_text, save_text
+from forge.core.fileio import LoadedBytes, LoadedText, load_text, load_utf8, save_text
 from forge.core.session import SessionState, TabState, load_session, read_backup
 from forge.core.session import save_session as write_session
 from forge.core.settings import Settings
+from forge.core.tasks import run_in_background
+from forge.core.watcher import FileWatcher
 from forge.editor.commenting import CommentMode
 from forge.editor.lexers import (
     PLAIN_TEXT,
@@ -59,7 +63,9 @@ from forge.themes.theme import THEMES, Theme, get_theme
 from forge.ui.appearance import apply_theme as apply_app_theme
 from forge.ui.appearance import round_popup_menus
 from forge.ui.document_tab import DocumentTab
+from forge.ui.format_menus import EncodingMenu, EolMenu
 from forge.ui.language_picker import LanguageMenu
+from forge.ui.notice_bar import Notice, NoticeBar
 from forge.ui.status_bar import ForgeStatusBar
 from forge.ui.title_bar import EdgeResizer, WindowHeader
 
@@ -71,6 +77,10 @@ NEW_TAB_BUTTON_SIZE = 24
 TAB_BUTTON_TOP_OFFSET = 4
 # Unsaved work is written to the session folder this often (and on quit).
 SESSION_AUTOSAVE_MS = 7000
+# Files from this size load on a background thread with progress.
+ASYNC_LOAD_BYTES = 2_000_000
+# Files from this size open without highlighting, word wrap and folding.
+LARGE_FILE_BYTES = 20_000_000
 Shortcut = QKeySequence.StandardKey | str | None
 
 # Notepad++ shortcuts on Linux; macOS conventions where they differ.
@@ -125,7 +135,18 @@ class MainWindow(QMainWindow):
         self.tabs.setMovable(True)
         self.tabs.setElideMode(Qt.TextElideMode.ElideMiddle)
         self.tabs.currentChanged.connect(self._on_current_changed)
-        self.setCentralWidget(self.tabs)
+        self.notice_bar = NoticeBar(self)
+        central = QWidget(self)
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.tabs)
+        # Notices appear below the editor, right above the status bar.
+        central_layout.addWidget(self.notice_bar)
+        self.setCentralWidget(central)
+        self.watcher = FileWatcher(self)
+        self.watcher.changed.connect(self._on_changed_on_disk)
+        self.watcher.deleted.connect(self._on_deleted_on_disk)
 
         bar = self._tab_bar()
         bar.setUsesScrollButtons(True)
@@ -162,7 +183,9 @@ class MainWindow(QMainWindow):
             if app is not None:
                 app.installEventFilter(self._resizer)
             self._update_frame_margins()
-        self.status = ForgeStatusBar(self._language_menu, self)
+        self.status = ForgeStatusBar(
+            self._language_menu, self._eol_status_menu, self._encoding_status_menu, self
+        )
         self.setStatusBar(self.status)
 
         self.setAcceptDrops(True)
@@ -320,6 +343,7 @@ class MainWindow(QMainWindow):
         self.status.show_tab(tab)
         self._update_window_title()
         self._sync_language_menu(tab)
+        self._show_notice_for(tab)
         if tab is not None:
             tab.setFocus()
 
@@ -393,27 +417,126 @@ class MainWindow(QMainWindow):
                 return tab
         if path.is_dir():
             return None
-        try:
-            loaded = load_text(path) if path.exists() else None
-        except OSError as exc:
-            log.warning("Could not open %s: %s", path, exc)
-            QMessageBox.warning(
-                self,
-                APP_NAME,
-                tr("Could not open {path}:\n{error}", path=str(path), error=str(exc)),
-            )
-            return None
-        if loaded is None:
+        if not path.exists():
             QMessageBox.warning(self, APP_NAME, tr("File not found: {path}", path=str(path)))
             return None
 
         self._last_dir = path.parent
-        document = Document(path=path, encoding=loaded.encoding, eol=loaded.eol)
         replace = self._single_pristine_untitled()
-        tab = self._add_tab(document, loaded.text)
+        tab = self._add_tab(Document(path=path))
+        if not self._fill_from_disk(tab):
+            self._remove_tab(tab)
+            if self.tabs.count() == 0:
+                self.new_document()
+            return None
         if replace is not None:
             self._remove_tab(replace)
         return tab
+
+    # Loading files -------------------------------------------------------
+
+    def _fill_from_disk(
+        self, tab: DocumentTab, after: Callable[[DocumentTab], None] | None = None
+    ) -> bool:
+        """Load ``tab.doc.path`` into ``tab``.
+
+        Small files load immediately. Files from ASYNC_LOAD_BYTES are read on a
+        background thread and fed to the editor in chunks while the status bar
+        shows progress. From LARGE_FILE_BYTES highlighting, wrap and folding
+        are switched off. Returns False when the file cannot be read at all.
+        """
+        path = tab.doc.path
+        assert path is not None
+        try:
+            size = path.stat().st_size
+        except OSError as exc:
+            self._show_open_error(path, exc)
+            return False
+        if size >= LARGE_FILE_BYTES and not tab.large_file:
+            tab.set_large_file_mode(True)
+
+        if size < ASYNC_LOAD_BYTES:
+            try:
+                loaded = load_text(path)
+            except OSError as exc:
+                self._show_open_error(path, exc)
+                return False
+            self._apply_loaded(tab, loaded)
+            tab.setText(loaded.text)
+            tab.SendScintilla(DocumentTab.SCI_EMPTYUNDOBUFFER)
+            tab.setModified(False)
+            self._loaded(tab, size, after)
+            return True
+
+        tab.loading = True
+        tab.setReadOnly(True)
+        name = tab.title
+        self.status.showMessage(tr("Loading {name}...", name=name))
+
+        def on_loaded(loaded: LoadedBytes) -> None:
+            if tab not in self.all_tabs() or tab.load_cancelled:
+                return
+            self.status.showMessage(tr("Opening {name}...", name=name))
+            self._apply_loaded(tab, loaded)
+            tab.setReadOnly(False)
+            tab.load_utf8(loaded.utf8)
+            tab.loading = False
+            self.status.clearMessage()
+            self._loaded(tab, size, after)
+
+        def on_failed(exc: Exception) -> None:
+            self.status.clearMessage()
+            if tab in self.all_tabs():
+                self._remove_tab(tab)
+                if self.tabs.count() == 0:
+                    self.new_document()
+            self._show_open_error(path, exc)
+
+        run_in_background(lambda: load_utf8(path), on_loaded, on_failed)
+        return True
+
+    def _apply_loaded(self, tab: DocumentTab, loaded: LoadedText | LoadedBytes) -> None:
+        tab.doc.encoding = loaded.encoding
+        tab.doc.eol = loaded.eol
+        tab.set_eol(loaded.eol)
+
+    def _loaded(
+        self, tab: DocumentTab, size: int, after: Callable[[DocumentTab], None] | None
+    ) -> None:
+        path = tab.doc.path
+        if path is not None:
+            self.watcher.watch(path)
+        if tab.large_file:
+            megabytes = max(1, round(size / 1_000_000))
+            self._set_notice(
+                tab,
+                Notice(
+                    "info",
+                    tr(
+                        "Large file ({size} MB): syntax highlighting, word wrap and "
+                        "folding are off to keep Forge fast.",
+                        size=megabytes,
+                    ),
+                    [(tr("Turn Highlighting On"), lambda: self._leave_large_mode(tab))],
+                ),
+            )
+        if after is not None:
+            after(tab)
+        if tab is self.current_tab():
+            self.status.show_tab(tab)
+            self._sync_menus(tab)
+
+    def _leave_large_mode(self, tab: DocumentTab) -> None:
+        self._set_notice(tab, None)
+        tab.set_large_file_mode(False)
+
+    def _show_open_error(self, path: Path, exc: Exception) -> None:
+        log.warning("Could not open %s: %s", path, exc)
+        QMessageBox.warning(
+            self,
+            APP_NAME,
+            tr("Could not open {path}:\n{error}", path=str(path), error=str(exc)),
+        )
 
     def _single_pristine_untitled(self) -> DocumentTab | None:
         """Notepad++ behavior: opening a file replaces a lone, empty 'new 1' tab."""
@@ -427,6 +550,9 @@ class MainWindow(QMainWindow):
     def save(self, tab: DocumentTab | None = None) -> bool:
         tab = tab or self.current_tab()
         if tab is None:
+            return False
+        if tab.loading:
+            self.status.showMessage(tr("{name} is still loading.", name=tab.title), 3000)
             return False
         if tab.doc.path is None:
             return self.save_as(tab)
@@ -466,7 +592,10 @@ class MainWindow(QMainWindow):
             return False
 
         old_suffix = tab.doc.path.suffix.lower() if tab.doc.path else None
+        if tab.doc.path is not None:
+            self._unwatch_if_unused(tab.doc.path, ignore=tab)
         tab.doc.path = path
+        self.watcher.watch(path)
         self._last_dir = path.parent
         # Only follow the extension when it names a real language and changed.
         # Saving a JSON document as "data" (no extension) keeps it JSON.
@@ -518,6 +647,10 @@ class MainWindow(QMainWindow):
             )
             return False
         tab.setModified(False)
+        if path == tab.doc.path:
+            self.watcher.remember(path)
+        if tab.notice is not None and tab.notice.kind == "warning":
+            self._set_notice(tab, None)
         return True
 
     # Closing -------------------------------------------------------------
@@ -566,6 +699,9 @@ class MainWindow(QMainWindow):
         return True
 
     def _remove_tab(self, tab: DocumentTab) -> None:
+        tab.cancel_loading()
+        if tab.doc.path is not None:
+            self._unwatch_if_unused(tab.doc.path, ignore=tab)
         index = self.tabs.indexOf(tab)
         if index >= 0:
             self.tabs.removeTab(index)
@@ -590,6 +726,14 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def changeEvent(self, event: QEvent | None) -> None:
+        if (
+            event is not None
+            and event.type() == QEvent.Type.ActivationChange
+            and self.isActiveWindow()
+        ):
+            # Like Notepad++: look for outside changes when Forge gets focus
+            # (file system events are not reliable on network drives).
+            self.watcher.check_all()
         if event is not None and event.type() == QEvent.Type.WindowStateChange:
             self.title_bar.update_state()
             self._update_frame_margins()
@@ -631,7 +775,7 @@ class MainWindow(QMainWindow):
             doc = tab.doc
             line, index = tab.getCursorPosition()
             text = tab.text()
-            unsaved = tab.is_dirty or (doc.is_untitled and bool(text))
+            unsaved = not tab.loading and (tab.is_dirty or (doc.is_untitled and bool(text)))
             backup = f"tab-{len(state.tabs) + 1}.txt" if unsaved else None
             if backup is not None:
                 backups[backup] = text
@@ -677,6 +821,12 @@ class MainWindow(QMainWindow):
 
     def _restore_tab(self, state: TabState) -> DocumentTab | None:
         path = Path(state.path) if state.path else None
+        language = language_by_id(state.language)
+
+        def place_cursor(tab: DocumentTab) -> None:
+            tab.setCursorPosition(state.cursor_line, state.cursor_index)
+            tab.setFirstVisibleLine(state.first_visible_line)
+
         if state.backup:
             text = read_backup(state.backup)
             if text is None:
@@ -688,23 +838,195 @@ class MainWindow(QMainWindow):
                 eol=eol,
                 untitled_index=state.untitled_index,
             )
-        elif path is not None and path.is_file():
-            try:
-                loaded = load_text(path)
-            except OSError:
-                log.warning("Could not reopen %s", path)
-                return None
-            text = loaded.text
-            document = Document(path=path, encoding=loaded.encoding, eol=loaded.eol)
-        else:
+            tab = self._add_tab(document, text)
+            tab.set_language(language)
+            if state.dirty:
+                tab.setModified(True)
+            if path is not None:
+                self.watcher.watch(path)
+            place_cursor(tab)
+            return tab
+        if path is None or not path.is_file():
             return None
-        tab = self._add_tab(document, text)
-        tab.set_language(language_by_id(state.language))
-        if state.dirty:
-            tab.setModified(True)
-        tab.setCursorPosition(state.cursor_line, state.cursor_index)
-        tab.setFirstVisibleLine(state.first_visible_line)
+        tab = self._add_tab(Document(path=path))
+        tab.set_language(language)
+        if not self._fill_from_disk(tab, after=place_cursor):
+            self._remove_tab(tab)
+            return None
         return tab
+
+    # Notices -------------------------------------------------------------
+
+    def _set_notice(self, tab: DocumentTab, notice: Notice | None) -> None:
+        tab.notice = notice
+        if tab is self.current_tab():
+            self._show_notice_for(tab)
+
+    def _show_notice_for(self, tab: DocumentTab | None) -> None:
+        notice = tab.notice if tab is not None else None
+        target = tab
+        self.notice_bar.show_notice(
+            notice, lambda: self._set_notice(target, None) if target is not None else None
+        )
+
+    # Changes made outside Forge --------------------------------------------
+
+    def _tabs_for(self, path: Path) -> list[DocumentTab]:
+        return [tab for tab in self.all_tabs() if tab.doc.path == path]
+
+    def _unwatch_if_unused(self, path: Path, ignore: DocumentTab) -> None:
+        if not any(tab is not ignore for tab in self._tabs_for(path)):
+            self.watcher.unwatch(path)
+
+    def _on_changed_on_disk(self, path: Path) -> None:
+        for tab in self._tabs_for(path):
+            if tab.loading:
+                continue
+            if not tab.is_dirty:
+                # Nothing to lose: reload quietly and keep the view where it was.
+                self.reload(tab)
+                self.status.showMessage(
+                    tr("{name} was reloaded because it changed on disk.", name=tab.title), 4000
+                )
+                continue
+            self._set_notice(
+                tab,
+                Notice(
+                    "warning",
+                    tr(
+                        "{name} was changed by another program. You also have unsaved "
+                        "changes here.",
+                        name=tab.title,
+                    ),
+                    [
+                        (tr("Reload from Disk"), partial(self.reload, tab)),
+                        (tr("Keep My Version"), partial(self._set_notice, tab, None)),
+                    ],
+                ),
+            )
+
+    def _on_deleted_on_disk(self, path: Path) -> None:
+        for tab in self._tabs_for(path):
+            # The text only exists in Forge now.
+            tab.setModified(True)
+            self._set_notice(
+                tab,
+                Notice(
+                    "warning",
+                    tr(
+                        "{name} was deleted or moved by another program. Your text is "
+                        "kept; save to write it to disk again.",
+                        name=tab.title,
+                    ),
+                    [
+                        (tr("Save"), partial(self.save, tab)),
+                        (tr("Close Tab"), partial(self._discard_tab, tab)),
+                    ],
+                ),
+            )
+
+    def _discard_tab(self, tab: DocumentTab) -> None:
+        self._remove_tab(tab)
+        if self.tabs.count() == 0:
+            self.new_document()
+
+    def reload(self, tab: DocumentTab) -> None:
+        """Replace the tab's text with the file on disk, keeping the view."""
+        if tab.doc.path is None:
+            return
+        line, index = tab.getCursorPosition()
+        first = tab.firstVisibleLine()
+        self._set_notice(tab, None)
+
+        def restore_view(t: DocumentTab) -> None:
+            t.setCursorPosition(min(line, max(0, t.lines() - 1)), index)
+            t.setFirstVisibleLine(first)
+
+        if not self._fill_from_disk(tab, after=restore_view):
+            return
+
+    # Encoding and line endings ----------------------------------------------
+
+    def convert_eol(self, eol: Eol) -> None:
+        tab = self.current_tab()
+        if tab is None or tab.loading or eol is tab.doc.eol:
+            return
+        tab.convert_eols(eol)
+        tab.doc.eol = eol
+        self.status.show_tab(tab)
+        self._sync_menus(tab)
+        self._mark_session_changed()
+
+    def convert_encoding(self, encoding: TextEncoding) -> None:
+        """Keep the text, save it in ``encoding`` from now on."""
+        tab = self.current_tab()
+        if tab is None or tab.loading or encoding == tab.doc.encoding:
+            return
+        if not can_encode(tab.text(), encoding):
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                tr(
+                    "This document contains characters that {encoding} cannot store.",
+                    encoding=encoding.label,
+                ),
+            )
+            self._sync_menus(tab)
+            return
+        tab.doc.encoding = encoding
+        tab.setModified(True)
+        self.status.show_tab(tab)
+        self._sync_menus(tab)
+        self._mark_session_changed()
+
+    def reinterpret_encoding(self, encoding: TextEncoding) -> None:
+        """Read the file on disk again as ``encoding`` (Notepad++ Encoding > X)."""
+        tab = self.current_tab()
+        if tab is None or tab.loading:
+            return
+        path = tab.doc.path
+        if path is None:
+            # Nothing on disk to reinterpret: just use it when saving.
+            tab.doc.encoding = encoding
+            self.status.show_tab(tab)
+            self._sync_menus(tab)
+            return
+        if tab.is_dirty:
+            answer = QMessageBox.question(
+                self,
+                APP_NAME,
+                tr(
+                    "Reloading {name} as {encoding} discards your unsaved changes. Continue?",
+                    name=tab.title,
+                    encoding=encoding.label,
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._sync_menus(tab)
+                return
+        try:
+            text = reinterpret(path.read_bytes(), encoding)
+        except UnicodeDecodeError:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                tr("{name} is not valid {encoding}.", name=tab.title, encoding=encoding.label),
+            )
+            self._sync_menus(tab)
+            return
+        except OSError as exc:
+            self._show_open_error(path, exc)
+            return
+        line, index = tab.getCursorPosition()
+        tab.doc.encoding = encoding
+        tab.setText(text)
+        tab.SendScintilla(DocumentTab.SCI_EMPTYUNDOBUFFER)
+        tab.setModified(False)
+        tab.setCursorPosition(min(line, max(0, tab.lines() - 1)), index)
+        self.status.show_tab(tab)
+        self._sync_menus(tab)
 
     # Drag and drop on the window (tab bar, empty areas) -------------------
 
@@ -854,6 +1176,9 @@ class MainWindow(QMainWindow):
         edit_menu.addSeparator()
         self._action(edit_menu, tr("Select &All"), self._on_editor("selectAll"), sk.SelectAll)
         edit_menu.addSeparator()
+        self._eol_menu = EolMenu(tr("&EOL Conversion"), self)
+        self._eol_menu.eol_chosen.connect(self.convert_eol)
+        edit_menu.addMenu(self._eol_menu)
         comment_menu = edit_menu.addMenu(tr("C&omment/Uncomment"))
         assert comment_menu is not None
         toggle = self._action(
@@ -888,6 +1213,20 @@ class MainWindow(QMainWindow):
         self._action(view_menu, tr("Zoom &In"), lambda: self._zoom(1), sk.ZoomIn)
         self._action(view_menu, tr("Zoom &Out"), lambda: self._zoom(-1), sk.ZoomOut)
         self._action(view_menu, tr("&Reset Zoom"), lambda: self._zoom(0), "Ctrl+0")
+
+        self._encoding_menu = EncodingMenu(tr("E&ncoding"), self)
+        self._encoding_menu.reinterpret_chosen.connect(self.reinterpret_encoding)
+        self._encoding_menu.convert_chosen.connect(self.convert_encoding)
+        bar.addMenu(self._encoding_menu)
+        # Separate instances for the status bar segments (a QMenu can only
+        # belong to one parent menu).
+        self._eol_status_menu = EolMenu(tr("&EOL Conversion"), self)
+        self._eol_status_menu.eol_chosen.connect(self.convert_eol)
+        self._encoding_status_menu = EncodingMenu(tr("E&ncoding"), self)
+        self._encoding_status_menu.reinterpret_chosen.connect(self.reinterpret_encoding)
+        self._encoding_status_menu.convert_chosen.connect(self.convert_encoding)
+        round_popup_menus(self._eol_status_menu)
+        round_popup_menus(self._encoding_status_menu)
 
         self._language_menu = LanguageMenu(tr("&Language"), all_languages(), self)
         self._language_menu.language_chosen.connect(self.set_document_language)
@@ -932,8 +1271,16 @@ class MainWindow(QMainWindow):
         self._action(help_menu, tr("&About Forge"), self.show_about, role=about_role)
 
     def _sync_language_menu(self, tab: DocumentTab | None) -> None:
-        if tab is not None:
-            self._language_menu.set_current(tab.language)
+        self._sync_menus(tab)
+
+    def _sync_menus(self, tab: DocumentTab | None) -> None:
+        if tab is None:
+            return
+        self._language_menu.set_current(tab.language)
+        for eol_menu in (self._eol_menu, self._eol_status_menu):
+            eol_menu.set_current(tab.doc.eol)
+        for encoding_menu in (self._encoding_menu, self._encoding_status_menu):
+            encoding_menu.set_current(tab.doc.encoding)
 
     def show_about(self) -> None:
         QMessageBox.about(

@@ -17,25 +17,32 @@ def _separator() -> QFrame:
     return line
 
 
+def _segment(menu: QMenu, tooltip: str) -> QToolButton:
+    button = QToolButton()
+    button.setObjectName("statusSegment")
+    button.setMenu(menu)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setToolTip(tooltip)
+    return button
+
+
 class ForgeStatusBar(QStatusBar):
-    def __init__(self, language_menu: QMenu, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        language_menu: QMenu,
+        eol_menu: QMenu,
+        encoding_menu: QMenu,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setSizeGripEnabled(False)
         self.position = QLabel()
 
-        # Clickable: opens the same menu as Language in the menu bar.
-        self.language = QToolButton()
-        self.language.setObjectName("statusSegment")
-        self.language.setMenu(language_menu)
-        self.language.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.language.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.language.setToolTip(tr("Change the language of this document"))
-
-        # Read-only until switching encodings and line endings arrives (phase b).
-        self.eol = QLabel()
-        self.eol.setToolTip(tr("Line endings"))
-        self.encoding = QLabel()
-        self.encoding.setToolTip(tr("Encoding"))
+        # Clickable segments open the same menus as the menu bar.
+        self.language = _segment(language_menu, tr("Change the language of this document"))
+        self.eol = _segment(eol_menu, tr("Line endings"))
+        self.encoding = _segment(encoding_menu, tr("Encoding"))
 
         self.addWidget(self.position)
         self.addPermanentWidget(self.language)
@@ -48,8 +55,8 @@ class ForgeStatusBar(QStatusBar):
         if tab is None:
             self.position.clear()
             self.language.setText("")
-            self.eol.clear()
-            self.encoding.clear()
+            self.eol.setText("")
+            self.encoding.setText("")
             return
         self.update_position(tab)
         language = tab.language

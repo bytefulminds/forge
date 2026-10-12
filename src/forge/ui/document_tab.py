@@ -13,6 +13,7 @@ from forge.core.settings import EditorSettings
 from forge.editor.forge_editor import ForgeEditor
 from forge.i18n.translator import tr
 from forge.themes.theme import Theme
+from forge.ui.notice_bar import Notice
 
 
 def _local_files(event: QDropEvent | QDragEnterEvent | QDragMoveEvent) -> list[Path]:
@@ -50,6 +51,10 @@ class DocumentTab(ForgeEditor):
         # session backup differs from the file on disk, so it is marked here.
         self._forced_dirty = False
         self.close_button: QToolButton | None = None
+        # True while a large file is streamed in; the tab is read-only then.
+        self.loading = False
+        # Message shown in the notice bar while this tab is active.
+        self.notice: Notice | None = None
 
     @property
     def title(self) -> str:

@@ -42,6 +42,8 @@ class ForgeEditor(QsciScintilla):
         self._theme = theme
         self._language: Language = PLAIN_TEXT
         self._lexer: QsciLexer | None = None
+        self._large_file = False
+        self._load_cancelled = False
 
         self.setUtf8(True)
         self.setAutoIndent(True)
@@ -90,7 +92,7 @@ class ForgeEditor(QsciScintilla):
         self.setIndentationsUseTabs(not settings.use_spaces)
         self.setWrapMode(
             QsciScintilla.WrapMode.WrapWord
-            if settings.word_wrap
+            if settings.word_wrap and not self._large_file
             else QsciScintilla.WrapMode.WrapNone
         )
         self.setWhitespaceVisibility(
@@ -139,9 +141,53 @@ class ForgeEditor(QsciScintilla):
 
     def set_language(self, language: Language) -> None:
         self._language = language
-        self._lexer = language.lexer(self) if language.lexer is not None else None
+        # Large files keep their language name but skip the lexer: styling
+        # hundreds of megabytes is what makes editors freeze.
+        use_lexer = language.lexer is not None and not self._large_file
+        self._lexer = language.lexer(self) if use_lexer and language.lexer else None
         self.setLexer(self._lexer)
         self.apply_theme(self._theme)
+
+    # Large files ---------------------------------------------------------
+
+    @property
+    def large_file(self) -> bool:
+        return self._large_file
+
+    def set_large_file_mode(self, enabled: bool) -> None:
+        """Turn off syntax highlighting, word wrap and folding for very large files."""
+        self._large_file = enabled
+        style = _Q.FoldStyle.NoFoldStyle if enabled else _Q.FoldStyle.BoxedTreeFoldStyle
+        self.setFolding(style, _FOLD_MARGIN)
+        if not enabled:
+            for marker, shape in _FOLD_MARKER_SHAPES.items():
+                self.SendScintilla(_Q.SCI_MARKERDEFINE, marker, shape)
+            self.setMarginWidth(_FOLD_MARGIN, _FOLD_MARGIN_WIDTH)
+        self.apply_settings(self._settings)
+        self.set_language(self._language)
+
+    def load_utf8(self, utf8: bytes) -> None:
+        """Replace the text with UTF-8 bytes in one call, without an undo step.
+
+        The bytes go straight to Scintilla, which stores UTF-8 itself, so no
+        Python string is created. One call is much faster than several: every
+        Scintilla insert costs time proportional to the document size.
+        """
+        self.SendScintilla(_Q.SCI_SETUNDOCOLLECTION, 0)
+        self.clear()
+        self.SendScintilla(_Q.SCI_APPENDTEXT, len(utf8), utf8)
+        self.SendScintilla(_Q.SCI_SETUNDOCOLLECTION, 1)
+        self.SendScintilla(_Q.SCI_EMPTYUNDOBUFFER)
+        self.setModified(False)
+        self.setCursorPosition(0, 0)
+
+    def cancel_loading(self) -> None:
+        """Mark a background load for this editor as no longer wanted."""
+        self._load_cancelled = True
+
+    @property
+    def load_cancelled(self) -> bool:
+        return self._load_cancelled
 
     # Comments ------------------------------------------------------------
 
@@ -182,6 +228,15 @@ class ForgeEditor(QsciScintilla):
 
     def set_eol(self, eol: Eol) -> None:
         self.setEolMode(_EOL_MODES[eol])
+
+    def convert_eols(self, eol: Eol) -> None:
+        """Rewrite every line ending in the document (one undo step)."""
+        self.beginUndoAction()
+        try:
+            self.convertEols(_EOL_MODES[eol])
+        finally:
+            self.endUndoAction()
+        self.set_eol(eol)
 
     # Internals -----------------------------------------------------------
 

@@ -7,6 +7,8 @@ import pytest
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 
+from forge.core.encoding import TextEncoding
+from forge.core.eol import Eol
 from forge.core.settings import Settings
 from forge.editor.commenting import CommentMode
 from forge.editor.lexers import language_by_id
@@ -282,3 +284,121 @@ def test_session_restores_tabs_unsaved_text_and_active_tab(qtbot: QtBot, tmp_pat
     assert edited.read_text() == "{}\n"  # the file itself is untouched
     assert restored["new 1"].text() == "scratch notes"
     assert second.current_tab() is restored["edited.json"]
+
+
+def _bump(path: Path, text: str) -> None:
+    import os
+
+    path.write_text(text)
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+
+
+def test_clean_tab_reloads_when_file_changes(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("old\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    _bump(file, "new\n")
+    window.watcher.check_all()
+    qtbot.waitUntil(lambda: tab.text() == "new\n", timeout=3000)
+    assert not tab.is_dirty
+
+
+def test_dirty_tab_gets_a_notice_instead_of_reload(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("old\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    tab.setText("mine\n")
+    _bump(file, "theirs\n")
+    window.watcher.check_all()
+    qtbot.waitUntil(lambda: tab.notice is not None, timeout=3000)
+    assert tab.text() == "mine\n"
+    assert not window.notice_bar.isHidden()
+    window.notice_bar.buttons[0].click()  # Reload from Disk
+    assert tab.text() == "theirs\n"
+    assert tab.notice is None
+
+
+def test_deleted_file_keeps_text_and_marks_dirty(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("keep me\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    file.unlink()
+    window.watcher.check_all()
+    qtbot.waitUntil(lambda: tab.notice is not None, timeout=3000)
+    assert tab.is_dirty
+    assert tab.text() == "keep me\n"
+    window.notice_bar.buttons[0].click()  # Save
+    assert file.read_text() == "keep me\n"
+
+
+def test_own_save_is_not_an_external_change(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("one\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    tab.setText("two\n")
+    assert window.save(tab)
+    window.watcher.check_all()
+    qtbot.wait(400)
+    assert tab.notice is None
+    assert tab.text() == "two\n"
+
+
+def test_convert_eol(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_bytes(b"a\nb\n")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    window.convert_eol(Eol.CRLF)
+    assert tab.doc.eol is Eol.CRLF
+    assert tab.is_dirty
+    assert window.save(tab)
+    assert file.read_bytes() == b"a\r\nb\r\n"
+    assert window.status.eol.text() == "Windows (CR LF)"
+
+
+def test_convert_and_reinterpret_encoding(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_bytes("café\n".encode("cp1252"))
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    window.reinterpret_encoding(TextEncoding("cp1252"))
+    assert tab.text() == "café\n"
+    window.convert_encoding(TextEncoding("utf-8", bom=True))
+    assert window.save(tab)
+    assert file.read_bytes() == b"\xef\xbb\xbfcaf\xc3\xa9\n"
+    assert window.status.encoding.text() == "UTF-8 BOM"
+
+
+def test_large_file_loads_in_background_without_highlighting(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import forge.ui.main_window as mw
+
+    monkeypatch.setattr(mw, "ASYNC_LOAD_BYTES", 1000)
+    monkeypatch.setattr(mw, "LARGE_FILE_BYTES", 1000)
+    file = tmp_path / "big.json"
+    body = '{"k": 1}\n' * 2000
+    file.write_text(body)
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    assert tab.loading and tab.isReadOnly()
+    qtbot.waitUntil(lambda: not tab.loading, timeout=5000)
+    assert tab.text() == body
+    assert not tab.is_dirty
+    assert tab.large_file and tab.lexer() is None
+    assert tab.language.id == "json"
+    assert tab.notice is not None and tab.notice.kind == "info"
+    window.notice_bar.buttons[0].click()  # Turn Highlighting On
+    assert tab.lexer() is not None
