@@ -33,10 +33,18 @@ class EditorSettings:
     word_wrap: bool = False
     show_whitespace: bool = False
     show_line_numbers: bool = True
+    highlight_current_line: bool = True
+
+
+@dataclass
+class GeneralSettings:
+    # Notepad++ "Remember current session": reopen tabs, including unsaved text.
+    remember_session: bool = True
 
 
 @dataclass
 class AppearanceSettings:
+    # "dark", "light" or "system" (follow the operating system).
     theme: str = "dark"
     # Empty means "follow the system locale".
     language: str = ""
@@ -50,6 +58,7 @@ class WindowSettings:
 
 @dataclass
 class Settings:
+    general: GeneralSettings = field(default_factory=GeneralSettings)
     editor: EditorSettings = field(default_factory=EditorSettings)
     appearance: AppearanceSettings = field(default_factory=AppearanceSettings)
     window: WindowSettings = field(default_factory=WindowSettings)
@@ -67,6 +76,7 @@ class Settings:
             return cls()
         _migrate(raw)
         return cls(
+            general=_build(GeneralSettings, raw.get("general", {})),
             editor=_build(EditorSettings, raw.get("editor", {})),
             appearance=_build(AppearanceSettings, raw.get("appearance", {})),
             window=_build(WindowSettings, raw.get("window", {})),

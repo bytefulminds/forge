@@ -231,8 +231,7 @@ def test_language_picker_filters_and_chooses(qtbot: QtBot) -> None:
     picker = window._language_menu.picker
     picker.reset()
     picker.filter.setText("yam")
-    visible = [item.text() for item in picker.visible_items()]
-    assert visible == ["YAML"]
+    assert picker.visible_labels() == ["YAML"]
     picker.choose_current()
     tab = window.current_tab()
     assert tab is not None and tab.language.id == "yaml"
@@ -243,7 +242,7 @@ def test_language_picker_shows_ten_rows(qtbot: QtBot) -> None:
     picker = window._language_menu.picker
     row = picker.list.sizeHintForRow(0)
     assert picker.list.height() < row * 11
-    assert picker.list.count() > 10  # the rest scrolls
+    assert picker.total_count > 10  # the rest scrolls
 
 
 def test_plus_button_opens_new_tab_next_to_last_tab(qtbot: QtBot) -> None:
@@ -473,3 +472,72 @@ def test_go_to_line_dialog(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(GoToLineDialog, "exec", fake_exec)
     window.go_to_line()
     assert tab.getCursorPosition() == (41, 0)
+
+
+def test_preferences_preview_ok_and_cancel(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
+    from forge.ui.preferences import PreferencesDialog
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+
+    def change_and_cancel(dialog: PreferencesDialog) -> int:
+        dialog.tab_width.setValue(2)
+        dialog.theme.setCurrentIndex(dialog.theme.findData("light"))
+        assert tab.tabWidth() == 2  # live preview
+        assert window.theme.id == "light"
+        dialog.reject()
+        return PreferencesDialog.DialogCode.Rejected.value
+
+    monkeypatch.setattr(PreferencesDialog, "exec", change_and_cancel)
+    window.open_preferences()
+    assert tab.tabWidth() == 4
+    assert window.theme.id == "dark"
+
+    def change_and_accept(dialog: PreferencesDialog) -> int:
+        dialog.word_wrap.setChecked(True)
+        dialog.indent.setCurrentIndex(dialog.indent.findData(False))
+        return PreferencesDialog.DialogCode.Accepted.value
+
+    monkeypatch.setattr(PreferencesDialog, "exec", change_and_accept)
+    window.open_preferences()
+    assert window.settings.editor.word_wrap
+    assert window._view_actions["wrap"].isChecked()  # View menu follows
+    assert tab.indentationsUseTabs()
+    assert Settings.load().editor.word_wrap  # saved
+
+
+def test_follow_system_theme(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
+    import forge.ui.main_window as mw
+
+    monkeypatch.setattr(mw, "system_prefers_dark", lambda _app: False)
+    window = make_window(qtbot)
+    window.set_theme("system")
+    assert window.theme.id == "light"
+    assert window._theme_actions["system"].isChecked()
+
+
+def test_session_off_starts_empty(qtbot: QtBot, tmp_path: Path) -> None:
+    file = tmp_path / "a.txt"
+    file.write_text("x")
+    settings = Settings()
+    settings.general.remember_session = False
+    first = MainWindow(settings)
+    qtbot.addWidget(first)
+    first.open_path(file)
+    first.close()
+    second = make_window(qtbot)
+    assert [t.title for t in second.all_tabs()] == ["new 1"]
+
+
+def test_language_filter_removes_rows_instead_of_hiding(qtbot: QtBot) -> None:
+    # Hidden rows break Qt's accessibility indexes on macOS; filtered rows
+    # must be removed from the view's model instead.
+    window = make_window(qtbot)
+    picker = window._language_menu.picker
+    picker.reset()
+    picker.filter.setText("ja")
+    model = picker.list.model()
+    assert model is not None
+    assert model.rowCount() == len(picker.visible_labels()) == 2  # Java, JavaScript
+    assert not any(picker.list.isRowHidden(r) for r in range(model.rowCount()))

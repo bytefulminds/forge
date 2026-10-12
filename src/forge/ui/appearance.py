@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from forge.core import paths
 from forge.themes.palette import build_palette
 from forge.themes.qss import build_stylesheet
 from forge.themes.theme import Theme
@@ -79,15 +80,46 @@ def install_style(app: QApplication) -> None:
     app.setFont(ui_font())
 
 
-def apply_theme(app: QApplication, theme: Theme) -> None:
-    # Tells the OS which appearance to use for native parts (macOS title text
-    # and traffic lights, native dialogs).
+def system_prefers_dark(app: QApplication) -> bool:
+    """Ask the OS for its color scheme (drops any scheme Forge forced earlier)."""
     hints = app.styleHints()
-    if hints is not None:
+    if hints is None:
+        return True
+    hints.unsetColorScheme()
+    return hints.colorScheme() != Qt.ColorScheme.Light
+
+
+def apply_theme(app: QApplication, theme: Theme, follow_system: bool = False) -> None:
+    # Tells the OS which appearance to use for native parts (native dialogs).
+    # When following the system, the OS scheme is left alone.
+    hints = app.styleHints()
+    if hints is not None and not follow_system:
         scheme = Qt.ColorScheme.Dark if theme.is_dark else Qt.ColorScheme.Light
         hints.setColorScheme(scheme)
     app.setPalette(build_palette(theme))
-    app.setStyleSheet(build_stylesheet(theme))
+    app.setStyleSheet(build_stylesheet(theme, _arrow_files(theme)))
+
+
+_ARROW_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+    '<path d="{path}" fill="none" stroke="{color}" stroke-width="1.6" '
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+)
+_ARROW_PATHS = {"up": "M2 6.5 L5 3.5 L8 6.5", "down": "M2 3.5 L5 6.5 L8 3.5"}
+
+
+def _arrow_files(theme: Theme) -> dict[str, str]:
+    """Write chevron SVGs in the theme's muted text color to the cache folder."""
+    folder = paths.cache_dir() / "ui"
+    folder.mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
+    color = theme.text_muted
+    for name, path in _ARROW_PATHS.items():
+        file = folder / f"arrow-{name}-{color.lstrip('#').lower()}.svg"
+        if not file.exists():
+            file.write_text(_ARROW_SVG.format(path=path, color=color), encoding="utf-8")
+        files[name] = file.as_posix()
+    return files
 
 
 def round_popup_menus(root: QMenu | QMenuBar) -> None:

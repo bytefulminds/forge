@@ -1,14 +1,26 @@
-"""Language menu: a filter field above a short, scrollable list of languages."""
+"""Language menu: a filter field above a short, scrollable list of languages.
+
+Filtering goes through a QSortFilterProxyModel, so rows that do not match are
+removed from the view's model instead of hidden. Hidden rows confuse Qt's
+accessibility layer on macOS ("QAccessibleList::child: Invalid index").
+"""
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QSortFilterProxyModel,
+    Qt,
+    pyqtSignal,
+)
+from PyQt6.QtGui import QFont, QKeyEvent, QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
+    QListView,
     QMenu,
     QVBoxLayout,
     QWidget,
@@ -40,15 +52,23 @@ class LanguagePicker(QWidget):
         self.filter.textChanged.connect(self.apply_filter)
         self.filter.installEventFilter(self)
 
-        self.list = QListWidget(self)
+        self._model = QStandardItemModel(self)
+        for language in languages:
+            item = QStandardItem(language_label(language))
+            item.setData(language, _ROLE)
+            item.setEditable(False)
+            self._model.appendRow(item)
+        self._proxy = QSortFilterProxyModel(self)
+        self._proxy.setSourceModel(self._model)
+        self._proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+
+        self.list = QListView(self)
+        self.list.setModel(self._proxy)
         self.list.setFrameShape(QFrame.Shape.NoFrame)
         self.list.setUniformItemSizes(True)
+        self.list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.list.itemClicked.connect(self._choose_item)
-        for language in languages:
-            item = QListWidgetItem(language_label(language))
-            item.setData(_ROLE, language)
-            self.list.addItem(item)
+        self.list.clicked.connect(self._choose_index)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -58,63 +78,62 @@ class LanguagePicker(QWidget):
         self.setMinimumWidth(220)
         self._fit_rows()
 
+    @property
+    def total_count(self) -> int:
+        return int(self._model.rowCount())
+
     def _fit_rows(self) -> None:
         # Measured after the stylesheet is applied (item padding changes the row height).
         self.list.ensurePolished()
-        row = self.list.sizeHintForRow(0) if self.list.count() else 24
+        row = self.list.sizeHintForRow(0) if self._proxy.rowCount() else 24
         self.list.setFixedHeight(row * VISIBLE_ROWS + 2 * self.list.frameWidth() + 2)
 
     def set_current(self, language: Language) -> None:
         self._current = language
-        for i in range(self.list.count()):
-            item = self.list.item(i)
+        for row in range(self._model.rowCount()):
+            item = self._model.item(row)
             if item is not None:
-                font = item.font()
+                font = QFont(item.font())
                 font.setBold(item.data(_ROLE) is language)
                 item.setFont(font)
 
     def reset(self) -> None:
         """Called each time the menu opens."""
-        self._fit_rows()
         self.filter.clear()
         self.apply_filter("")
-        for i in range(self.list.count()):
-            item = self.list.item(i)
-            if item is not None and item.data(_ROLE) is self._current:
-                self.list.setCurrentItem(item)
-                self.list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+        self._fit_rows()
+        for row in range(self._proxy.rowCount()):
+            index = self._proxy.index(row, 0)
+            if index.data(_ROLE) is self._current:
+                self.list.setCurrentIndex(index)
+                self.list.scrollTo(index, QAbstractItemView.ScrollHint.PositionAtCenter)
+                break
         self.filter.setFocus()
 
-    def visible_items(self) -> list[QListWidgetItem]:
-        items = (self.list.item(i) for i in range(self.list.count()))
-        return [item for item in items if item is not None and not item.isHidden()]
+    def visible_labels(self) -> list[str]:
+        return [str(self._proxy.index(r, 0).data()) for r in range(self._proxy.rowCount())]
 
     def apply_filter(self, text: str) -> None:
-        needle = text.strip().casefold()
-        for i in range(self.list.count()):
-            item = self.list.item(i)
-            if item is not None:
-                item.setHidden(bool(needle) and needle not in item.text().casefold())
-        visible = self.visible_items()
-        if needle and visible:
-            self.list.setCurrentItem(visible[0])
+        self._proxy.setFilterFixedString(text.strip())
+        if text.strip() and self._proxy.rowCount():
+            self.list.setCurrentIndex(self._proxy.index(0, 0))
 
     def _move(self, step: int) -> None:
-        visible = self.visible_items()
-        if not visible:
+        rows = self._proxy.rowCount()
+        if not rows:
             return
-        current = self.list.currentItem()
-        index = visible.index(current) if current in visible else -1
-        index = max(0, min(len(visible) - 1, index + step))
-        self.list.setCurrentItem(visible[index])
+        current = self.list.currentIndex()
+        row = current.row() if current.isValid() else -1
+        row = max(0, min(rows - 1, row + step))
+        self.list.setCurrentIndex(self._proxy.index(row, 0))
 
     def choose_current(self) -> None:
-        item = self.list.currentItem()
-        if item is not None and not item.isHidden():
-            self._choose_item(item)
+        index = self.list.currentIndex()
+        if index.isValid():
+            self._choose_index(index)
 
-    def _choose_item(self, item: QListWidgetItem) -> None:
-        self.language_chosen.emit(item.data(_ROLE))
+    def _choose_index(self, index: QModelIndex) -> None:
+        self.language_chosen.emit(index.data(_ROLE))
 
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
         is_key_press = isinstance(event, QKeyEvent) and event.type() == QEvent.Type.KeyPress

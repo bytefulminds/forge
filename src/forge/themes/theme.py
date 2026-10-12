@@ -151,6 +151,12 @@ LIGHT = Theme(
 
 THEMES: dict[str, Theme] = {DARK.id: DARK, LIGHT.id: LIGHT}
 
+# Settings value meaning "use dark or light like the operating system".
+SYSTEM_THEME_ID = "system"
+THEME_CHOICES: tuple[str, ...] = (DARK.id, LIGHT.id, SYSTEM_THEME_ID)
 
-def get_theme(theme_id: str) -> Theme:
+
+def get_theme(theme_id: str, system_is_dark: bool = True) -> Theme:
+    if theme_id == SYSTEM_THEME_ID:
+        return DARK if system_is_dark else LIGHT
     return THEMES.get(theme_id, DARK)

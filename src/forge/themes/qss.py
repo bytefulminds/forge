@@ -5,8 +5,16 @@ from __future__ import annotations
 from forge.themes.theme import Theme
 
 
-def build_stylesheet(theme: Theme) -> str:
+def build_stylesheet(theme: Theme, arrows: dict[str, str] | None = None) -> str:
+    """Stylesheet for ``theme``.
+
+    ``arrows`` maps "up" and "down" to small SVG files (made by the UI layer)
+    for spin box and combo box arrows; QSS cannot draw them itself once those
+    controls are styled.
+    """
     c = theme
+    up = (arrows or {}).get("up", "")
+    down = (arrows or {}).get("down", "")
     return f"""
 QMainWindow {{ background: {c.chrome_bg}; }}
 QsciScintilla {{ border: none; }}
@@ -39,12 +47,12 @@ QMenu::item:disabled {{ color: {c.text_disabled}; }}
 QMenu::separator {{ height: 1px; background: {c.border}; margin: 4px 8px; }}
 
 QWidget#languagePicker {{ background: transparent; }}
-QWidget#languagePicker QListWidget {{
+QWidget#languagePicker QListView {{
     background: transparent; border: none; outline: 0; color: {c.text};
 }}
-QWidget#languagePicker QListWidget::item {{ padding: 5px 10px; border-radius: 6px; }}
-QWidget#languagePicker QListWidget::item:hover {{ background: {c.hover_bg}; }}
-QWidget#languagePicker QListWidget::item:selected {{
+QWidget#languagePicker QListView::item {{ padding: 5px 10px; border-radius: 6px; }}
+QWidget#languagePicker QListView::item:hover {{ background: {c.hover_bg}; }}
+QWidget#languagePicker QListView::item:selected {{
     background: {c.menu_selected_bg}; color: {c.text};
 }}
 
@@ -123,6 +131,12 @@ QToolButton#noticeDismiss {{
 }}
 QToolButton#noticeDismiss:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 
+QLabel#prefSection {{
+    color: {c.text_muted}; font-size: 12px; font-weight: 600; padding-top: 8px;
+}}
+QLabel#prefNote {{ color: {c.warning}; font-size: 12px; }}
+QCheckBox {{ spacing: 8px; }}
+
 QDialog, QMessageBox {{ background: {c.elevated_bg}; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};
@@ -148,7 +162,17 @@ QLineEdit, QComboBox, QSpinBox {{
     selection-background-color: {c.selection};
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {c.focus}; }}
-QComboBox::drop-down {{ width: 20px; border: none; }}
+QComboBox::drop-down {{ width: 22px; border: none; }}
+QComboBox::down-arrow {{ image: url("{down}"); width: 10px; height: 10px; }}
+QSpinBox {{ padding-right: 22px; }}
+QSpinBox::up-button, QSpinBox::down-button {{
+    subcontrol-origin: border; width: 20px; border: none; background: transparent;
+}}
+QSpinBox::up-button {{ subcontrol-position: top right; }}
+QSpinBox::down-button {{ subcontrol-position: bottom right; }}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{ background: {c.hover_bg}; }}
+QSpinBox::up-arrow {{ image: url("{up}"); width: 8px; height: 8px; }}
+QSpinBox::down-arrow {{ image: url("{down}"); width: 8px; height: 8px; }}
 QComboBox QAbstractItemView {{
     background: {c.elevated_bg}; border: 1px solid {c.border_strong};
     selection-background-color: {c.menu_selected_bg}; selection-color: {c.text};

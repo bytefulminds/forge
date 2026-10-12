@@ -60,15 +60,16 @@ from forge.editor.lexers import (
 )
 from forge.i18n.catalog import LANGUAGES
 from forge.i18n.translator import current_language, tr
-from forge.themes.theme import THEMES, Theme, get_theme
+from forge.themes.theme import SYSTEM_THEME_ID, THEME_CHOICES, Theme, get_theme
 from forge.ui.appearance import apply_theme as apply_app_theme
-from forge.ui.appearance import round_popup_menus
+from forge.ui.appearance import round_popup_menus, system_prefers_dark
 from forge.ui.document_tab import DocumentTab
 from forge.ui.find_bar import FindBar
 from forge.ui.format_menus import EncodingMenu, EolMenu
 from forge.ui.goto_dialog import GoToLineDialog
 from forge.ui.language_picker import LanguageMenu
 from forge.ui.notice_bar import Notice, NoticeBar
+from forge.ui.preferences import PreferencesDialog, theme_label
 from forge.ui.status_bar import ForgeStatusBar
 from forge.ui.title_bar import EdgeResizer, WindowHeader
 
@@ -137,6 +138,7 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.settings = settings
         self.theme: Theme = get_theme(settings.appearance.theme)
+        self._applying_theme = False
         self._last_dir = Path.home()
 
         self.tabs = QTabWidget(self)
@@ -202,11 +204,15 @@ class MainWindow(QMainWindow):
 
         self.setAcceptDrops(True)
         self._restore_geometry()
-        self.apply_theme(self.theme)
+        self.apply_appearance()
+        hints = QGuiApplication.styleHints()
+        if hints is not None:
+            hints.colorSchemeChanged.connect(self._on_system_scheme_changed)
 
         self._session_changed = False
         self._restoring = False
-        self.restore_session()
+        if settings.general.remember_session:
+            self.restore_session()
         if self.tabs.count() == 0:
             self.new_document()
         self._session_timer = QTimer(self)
@@ -728,7 +734,14 @@ class MainWindow(QMainWindow):
         # Notepad++ behavior: no questions on quit, everything (including
         # unsaved text) is kept in the session and restored on the next start.
         # Only when the session cannot be written do we fall back to asking.
-        if not self.save_session():
+        if not self.settings.general.remember_session:
+            # Session off: ask about unsaved work, start empty next time.
+            for tab in self.all_tabs():
+                if not self._confirm_discard(tab):
+                    event.ignore()
+                    return
+            self._clear_session()
+        elif not self.save_session():
             for tab in self.all_tabs():
                 if not self._confirm_discard(tab):
                     event.ignore()
@@ -818,6 +831,12 @@ class MainWindow(QMainWindow):
             return False
         self._session_changed = False
         return True
+
+    def _clear_session(self) -> None:
+        try:
+            write_session(SessionState(), {})
+        except OSError:
+            log.exception("Could not clear the session")
 
     def restore_session(self) -> None:
         state = load_session()
@@ -1072,23 +1091,56 @@ class MainWindow(QMainWindow):
 
     # Appearance and view settings -----------------------------------------
 
-    def apply_theme(self, theme: Theme) -> None:
+    def apply_theme(self, theme: Theme, follow_system: bool = False) -> None:
         self.theme = theme
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            apply_app_theme(app, theme)
+            apply_app_theme(app, theme, follow_system)
         for tab in self.all_tabs():
             tab.apply_theme(theme)
 
+    def apply_appearance(self) -> None:
+        """Apply the configured theme; "system" follows the OS dark/light setting."""
+        theme_id = self.settings.appearance.theme
+        follow_system = theme_id == SYSTEM_THEME_ID
+        app = QApplication.instance()
+        system_dark = (
+            system_prefers_dark(app) if follow_system and isinstance(app, QApplication) else True
+        )
+        self._applying_theme = True
+        try:
+            self.apply_theme(get_theme(theme_id, system_dark), follow_system)
+        finally:
+            self._applying_theme = False
+        for tid, action in getattr(self, "_theme_actions", {}).items():
+            action.setChecked(tid == theme_id)
+
+    def _on_system_scheme_changed(self, _scheme: object) -> None:
+        if not self._applying_theme and self.settings.appearance.theme == SYSTEM_THEME_ID:
+            self.apply_appearance()
+
     def set_theme(self, theme_id: str) -> None:
         self.settings.appearance.theme = theme_id
-        self.apply_theme(get_theme(theme_id))
+        self.apply_appearance()
         self.settings.save()
 
     def _apply_editor_settings(self) -> None:
         for tab in self.all_tabs():
             tab.apply_settings(self.settings.editor)
+        self._sync_view_actions()
         self.settings.save()
+
+    def _sync_view_actions(self) -> None:
+        ed = self.settings.editor
+        states = {
+            "wrap": ed.word_wrap,
+            "whitespace": ed.show_whitespace,
+            "numbers": ed.show_line_numbers,
+        }
+        for key, action in self._view_actions.items():
+            action.blockSignals(True)
+            action.setChecked(states[key])
+            action.blockSignals(False)
 
     def _toggle_word_wrap(self, checked: bool) -> None:
         self.settings.editor.word_wrap = checked
@@ -1101,6 +1153,23 @@ class MainWindow(QMainWindow):
     def _toggle_line_numbers(self, checked: bool) -> None:
         self.settings.editor.show_line_numbers = checked
         self._apply_editor_settings()
+
+    def open_preferences(self) -> None:
+        dialog = PreferencesDialog(self.settings, self.apply_settings, self)
+        if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
+            self.apply_settings(dialog.settings)
+            self.settings.save()
+
+    def apply_settings(self, settings: Settings) -> None:
+        """Take over editor, appearance and general settings (window state stays)."""
+        self.settings.general = settings.general
+        self.settings.editor = settings.editor
+        self.settings.appearance = settings.appearance
+        for tab in self.all_tabs():
+            tab.apply_settings(self.settings.editor)
+        self._sync_view_actions()
+        self.apply_appearance()
+        self._sync_ui_language_actions()
 
     def _zoom(self, steps: int) -> None:
         tab = self.current_tab()
@@ -1118,6 +1187,7 @@ class MainWindow(QMainWindow):
             return
         self.settings.appearance.language = language
         self.settings.save()
+        self._sync_ui_language_actions()
         if language != current_language():
             QMessageBox.information(self, APP_NAME, tr("Restart Forge to use the new language."))
 
@@ -1248,9 +1318,15 @@ class MainWindow(QMainWindow):
         wrap_text = tr("Word &Wrap")
         whitespace_text = tr("Show White&space and Line Endings")
         numbers_text = tr("Show &Line Numbers")
-        self._checkable(view_menu, wrap_text, ed.word_wrap, self._toggle_word_wrap)
-        self._checkable(view_menu, whitespace_text, ed.show_whitespace, self._toggle_whitespace)
-        self._checkable(view_menu, numbers_text, ed.show_line_numbers, self._toggle_line_numbers)
+        self._view_actions = {
+            "wrap": self._checkable(view_menu, wrap_text, ed.word_wrap, self._toggle_word_wrap),
+            "whitespace": self._checkable(
+                view_menu, whitespace_text, ed.show_whitespace, self._toggle_whitespace
+            ),
+            "numbers": self._checkable(
+                view_menu, numbers_text, ed.show_line_numbers, self._toggle_line_numbers
+            ),
+        }
         view_menu.addSeparator()
         self._action(view_menu, tr("Zoom &In"), lambda: self._zoom(1), sk.ZoomIn)
         self._action(view_menu, tr("Zoom &Out"), lambda: self._zoom(-1), sk.ZoomOut)
@@ -1276,41 +1352,58 @@ class MainWindow(QMainWindow):
 
         settings_menu = bar.addMenu(tr("Se&ttings"))
         assert settings_menu is not None
+        self._action(
+            settings_menu,
+            tr("&Preferences..."),
+            self.open_preferences,
+            "Ctrl+,",
+            QAction.MenuRole.PreferencesRole,
+        )
+        settings_menu.addSeparator()
         theme_menu = settings_menu.addMenu(tr("&Theme"))
         assert theme_menu is not None
         theme_group = QActionGroup(self)
-        theme_labels = {"dark": tr("Forge Dark"), "light": tr("Forge Light")}
-        for theme_id in THEMES:
-            action = QAction(theme_labels.get(theme_id, theme_id), theme_group)
+        self._theme_actions: dict[str, QAction] = {}
+        for theme_id in THEME_CHOICES:
+            action = QAction(theme_label(theme_id), theme_group)
             action.setCheckable(True)
-            action.setChecked(theme_id == self.theme.id)
+            action.setChecked(theme_id == self.settings.appearance.theme)
             action.setMenuRole(QAction.MenuRole.NoRole)
             action.triggered.connect(lambda _c=False, tid=theme_id: self.set_theme(tid))
             theme_menu.addAction(action)
+            self._theme_actions[theme_id] = action
 
         ui_language_menu = settings_menu.addMenu(tr("&Interface Language"))
         assert ui_language_menu is not None
         ui_group = QActionGroup(self)
-        configured = self.settings.appearance.language
+        self._ui_language_actions: dict[str, QAction] = {}
         system_action = QAction(tr("System Default"), ui_group)
         system_action.setCheckable(True)
-        system_action.setChecked(configured not in LANGUAGES)
         system_action.setMenuRole(QAction.MenuRole.NoRole)
         system_action.triggered.connect(lambda _c=False: self.set_interface_language(""))
         ui_language_menu.addAction(system_action)
         ui_language_menu.addSeparator()
+        self._ui_language_actions[""] = system_action
         for code, name in LANGUAGES.items():
             action = QAction(name, ui_group)
             action.setCheckable(True)
-            action.setChecked(code == configured)
             action.setMenuRole(QAction.MenuRole.NoRole)
             action.triggered.connect(lambda _c=False, lc=code: self.set_interface_language(lc))
             ui_language_menu.addAction(action)
+            self._ui_language_actions[code] = action
+        self._sync_ui_language_actions()
 
         help_menu = bar.addMenu(tr("&Help"))
         assert help_menu is not None
         about_role = QAction.MenuRole.AboutRole
         self._action(help_menu, tr("&About Forge"), self.show_about, role=about_role)
+
+    def _sync_ui_language_actions(self) -> None:
+        configured = self.settings.appearance.language
+        key = configured if configured in LANGUAGES else ""
+        action = getattr(self, "_ui_language_actions", {}).get(key)
+        if action is not None:
+            action.setChecked(True)
 
     def _sync_language_menu(self, tab: DocumentTab | None) -> None:
         self._sync_menus(tab)

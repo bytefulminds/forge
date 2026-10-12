@@ -107,6 +107,7 @@ class ForgeEditor(QsciScintilla):
             else QsciScintilla.WhitespaceVisibility.WsInvisible
         )
         self.setEolVisibility(settings.show_whitespace)
+        self.setCaretLineVisible(settings.highlight_current_line)
         self.apply_theme(self._theme)
 
     def apply_theme(self, theme: Theme) -> None:
