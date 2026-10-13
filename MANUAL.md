@@ -126,10 +126,11 @@ macOS and Linux and CR LF on Windows, as Notepad++ does.
 ## 4. Editing
 
 - Undo, redo, cut, copy, paste and select all work as everywhere.
-- **Right-click** in the editor for the edit commands and the developer tools: with text
-  selected you get Hash, Encode / Decode, Text, Generate, Date and Time and Cron; without
-  a selection, the tools that do not need one, such as inserting a UUID or the date and
-  time (section 15).
+- **Right-click** in the editor for the edit commands and the developer tools (section 15).
+  The menu only shows what fits: the conversions for the selected text (Base64 Decode only
+  when the selection is Base64, Explain Cron only for a cron expression, HTML escaping in
+  HTML, XML and Markdown files) and, without a selection, inserting a UUID or the date and
+  time.
 - **Comments:** toggle with `Ctrl+Q` or `Ctrl+/` (on macOS `Ctrl+Q`, the Control key),
   comment with `Ctrl+K`, uncomment with `Ctrl+Shift+K`. Works on every selected line, in
   every language that has comments.
@@ -179,8 +180,10 @@ typing* in Preferences.
 Every document has a toolbar above the text.
 
 - **Left:** the tools for the document's language, plus *Toggle Comment* when the language
-  has comments. Hover a button for its name and shortcut. The same tools are in the Tools
-  menu.
+  has comments. Hover a button for its name and shortcut. Language tools live only here
+  (their keyboard shortcuts work everywhere in that document); the Tools menu holds the
+  general tools. When a language has settings, such as *Auto-close Tags* for XML, the
+  last button (the sliders icon) opens them.
 - **Right:** word wrap, and for Markdown, CSV and JSON the three views:
   - **Text:** only the editor.
   - **Split:** editor and preview side by side; the preview scrolls along with the editor.
@@ -253,7 +256,7 @@ code, so you can find a value in a large document by browsing the tree.
   delimiter in the status bar or the first toolbar button and pick one; *Detect
   Automatically* goes back to detection. The choice is per document.
 - **Header row:** Forge detects whether the first row holds column names. Not every CSV
-  file has one, so you can choose with the *Header Row* toolbar button (or Tools > CSV):
+  file has one, so you can choose with the *Header Row* toolbar button:
   *Detect Automatically*, *First Row Is the Header* or *No Header Row*. The choice is per
   document and is remembered after a restart.
 - **Status bar:** shows the column at the cursor, with its name when the file has a header
@@ -286,8 +289,8 @@ code, so you can find a value in a large document by browsing the tree.
   With a selection it also works in other files, such as logs.
 - Seconds, milliseconds, microseconds and nanoseconds are recognized by their number of
   digits (10, 13, 16 or 19).
-- Dates are written in UTC with a `Z`. Turn on *Tools > CSV > Use Local Time* for your own
-  time zone.
+- Dates are written in UTC with a `Z`. Turn on *Use Local Time* under the options button at
+  the end of the CSV toolbar for your own time zone.
 - Dates without a time zone are read as UTC. Turn on *Epoch in Milliseconds* to get
   milliseconds instead of seconds.
 
@@ -307,7 +310,7 @@ code, so you can find a value in a large document by browsing the tree.
 | Minify | Removes the whitespace between elements | |
 | Check Well-formedness | Checks the document and jumps to the first error | `Ctrl+Alt+Shift+K` |
 | Evaluate XPath | Opens a panel to run XPath expressions; click a result to jump to it | |
-| Auto-close Tags | Typing `>` after an opening tag adds the closing tag (on by default) | |
+| Auto-close Tags | Typing `>` after an opening tag adds the closing tag (on by default; options button on the toolbar) | |
 
 ## 12. YAML
 
@@ -347,8 +350,9 @@ the background and can be cancelled.
 
 ## 15. Developer tools
 
-The Tools menu has a set of everyday developer tools, grouped in submenus. The ones that work
-on text are also in the editor's right-click menu.
+The Tools menu holds the general tools: Compare (section 13) and a set of everyday developer
+tools, grouped in submenus. The ones that work on text are also in the editor's right-click
+menu, which only offers what fits the document's language and the selected text.
 
 ### Hash
 
@@ -393,7 +397,8 @@ is and the status bar says why.
   `2026-10-13T14:05:09+02:00`; **(UTC)** inserts `2026-10-13T12:05:09Z`.
 - **Insert Date** (`2026-10-13`) and **Insert Unix Timestamp** (seconds).
 - **Epoch to ISO 8601** and **ISO 8601 to Epoch:** convert every timestamp in the selection,
-  as the CSV tools do (section 10).
+  as the CSV tools do (section 10). Dates are in UTC unless *Use Local Time* (in this
+  submenu) is on.
 - **Date and Time Converter:** type or paste a Unix timestamp (seconds, milliseconds,
   microseconds or nanoseconds), an ISO 8601 date, an RFC 2822 date (as in e-mail and HTTP
   headers) or `now`, and see it as Unix seconds and milliseconds, ISO 8601 in UTC and local

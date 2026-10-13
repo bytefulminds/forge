@@ -283,3 +283,7 @@ def explain_cron(api: ForgeAPI) -> None:
     from forge.tools.devtools.dialogs import CronDialog
 
     CronDialog(api, _selection(api) or "0 9 * * MON-FRI").exec()
+
+
+def setting_changed(api: ForgeAPI) -> None:
+    """Checkable settings are stored by Forge; nothing else to do."""

@@ -7,16 +7,38 @@ and one function in ``actions``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from forge.extensions.base import CommandSpec, ExtensionInfo, Text
 from forge.i18n.translator import tr
+from forge.tools.devtools import detect
 
 _A = "forge.tools.devtools.actions"
 
 
+# Languages where markup escaping and string literals are at home.
+_MARKUP = ("text", "html", "xml", "markdown", "javascript")
+_STRINGS = ("text", "json", "javascript", "python", "yaml", "java", "csharp", "cpp")
+
+
 def _cmd(
-    id: str, title: Text, handler: str, context: str | None = "selection", sep: bool = False
+    id: str,
+    title: Text,
+    handler: str,
+    context: str | None = "selection",
+    sep: bool = False,
+    languages: tuple[str, ...] = (),
+    when: Callable[[str], bool] | None = None,
 ) -> CommandSpec:
-    return CommandSpec(id, title, f"{_A}:{handler}", context=context, separator_before=sep)
+    return CommandSpec(
+        id,
+        title,
+        f"{_A}:{handler}",
+        context=context,
+        separator_before=sep,
+        context_languages=languages,
+        context_when=when,
+    )
 
 
 HASH = ExtensionInfo(
@@ -24,7 +46,7 @@ HASH = ExtensionInfo(
     title=lambda: tr("&Hash"),
     separator_before=True,
     commands=(
-        _cmd("hash.text", lambda: tr("Hash &Selection..."), "hash_selection", "always"),
+        _cmd("hash.text", lambda: tr("Hash &Selection..."), "hash_selection"),
         _cmd("hash.files", lambda: tr("Hash &Files..."), "hash_files", None),
     ),
 )
@@ -34,14 +56,45 @@ ENCODE = ExtensionInfo(
     title=lambda: tr("&Encode / Decode"),
     commands=(
         _cmd("encode.base64", lambda: tr("Base64 &Encode"), "base64_encode"),
-        _cmd("decode.base64", lambda: tr("Base64 &Decode"), "base64_decode"),
+        _cmd(
+            "decode.base64",
+            lambda: tr("Base64 &Decode"),
+            "base64_decode",
+            when=detect.looks_like_base64,
+        ),
         _cmd("encode.url", lambda: tr("&URL Encode"), "url_encode", sep=True),
-        _cmd("decode.url", lambda: tr("URL Dec&ode"), "url_decode"),
-        _cmd("encode.html", lambda: tr("&HTML Escape"), "html_escape", sep=True),
-        _cmd("decode.html", lambda: tr("HTML U&nescape"), "html_unescape"),
-        _cmd("encode.json", lambda: tr("&JSON String Escape"), "json_escape", sep=True),
-        _cmd("decode.json", lambda: tr("JSON String Unesca&pe"), "json_unescape"),
-        _cmd("decode.jwt", lambda: tr("Decode JW&T"), "decode_jwt", sep=True),
+        _cmd(
+            "decode.url", lambda: tr("URL Dec&ode"), "url_decode", when=detect.has_percent_escapes
+        ),
+        _cmd("encode.html", lambda: tr("&HTML Escape"), "html_escape", sep=True, languages=_MARKUP),
+        _cmd(
+            "decode.html",
+            lambda: tr("HTML U&nescape"),
+            "html_unescape",
+            languages=_MARKUP,
+            when=detect.has_html_entities,
+        ),
+        _cmd(
+            "encode.json",
+            lambda: tr("&JSON String Escape"),
+            "json_escape",
+            sep=True,
+            languages=_STRINGS,
+        ),
+        _cmd(
+            "decode.json",
+            lambda: tr("JSON String Unesca&pe"),
+            "json_unescape",
+            languages=_STRINGS,
+            when=detect.has_json_escapes,
+        ),
+        _cmd(
+            "decode.jwt",
+            lambda: tr("Decode JW&T"),
+            "decode_jwt",
+            sep=True,
+            when=detect.looks_like_jwt,
+        ),
     ),
 )
 
@@ -86,23 +139,47 @@ DATETIME = ExtensionInfo(
         ),
         _cmd("datetime.today", lambda: tr("Insert D&ate"), "insert_today", "always"),
         _cmd("datetime.epoch", lambda: tr("Insert Unix &Timestamp"), "insert_epoch", "always"),
-        _cmd("datetime.to_iso", lambda: tr("&Epoch to ISO 8601"), "epoch_to_iso", sep=True),
-        _cmd("datetime.to_epoch", lambda: tr("&ISO 8601 to Epoch"), "iso_to_epoch"),
+        _cmd(
+            "datetime.to_iso",
+            lambda: tr("&Epoch to ISO 8601"),
+            "epoch_to_iso",
+            sep=True,
+            when=detect.has_epoch,
+        ),
+        _cmd(
+            "datetime.to_epoch",
+            lambda: tr("&ISO 8601 to Epoch"),
+            "iso_to_epoch",
+            when=detect.has_iso_date,
+        ),
         _cmd(
             "datetime.convert",
             lambda: tr("Date and Time &Converter..."),
             "converter",
-            "always",
             sep=True,
+            when=detect.is_moment,
+        ),
+        CommandSpec(
+            "datetime.local_time",
+            lambda: tr("Use &Local Time"),
+            f"{_A}:setting_changed",
+            checked_setting="local_time",
+            separator_before=True,
         ),
     ),
+    defaults={"local_time": False},
 )
 
 CRON = ExtensionInfo(
     id="forge.cron",
     title=lambda: tr("C&ron"),
     commands=(
-        _cmd("cron.explain", lambda: tr("&Explain Cron Expression..."), "explain_cron", "always"),
+        _cmd(
+            "cron.explain",
+            lambda: tr("&Explain Cron Expression..."),
+            "explain_cron",
+            when=detect.is_cron,
+        ),
     ),
 )
 

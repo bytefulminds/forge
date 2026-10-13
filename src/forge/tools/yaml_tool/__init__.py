@@ -8,6 +8,7 @@ from forge.i18n.translator import tr
 EXTENSION = ExtensionInfo(
     id="forge.yaml",
     title=lambda: tr("&YAML"),
+    placement="language",
     commands=(
         CommandSpec(
             "yaml.validate",

@@ -11,7 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QToolButton, QWidget
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QMenu, QToolButton, QWidget
 
 from forge.i18n.translator import tr
 from forge.themes.theme import Theme
@@ -32,6 +33,8 @@ class ToolItem:
     tooltip: str
     run: Callable[[], None]
     separator_before: bool = False
+    # A dropdown of these actions instead of a click action (checkable options).
+    menu: list[QAction] | None = None
 
 
 class DocumentToolbar(QWidget):
@@ -113,7 +116,14 @@ class DocumentToolbar(QWidget):
                 self._tools.addWidget(separator)
                 self._tool_widgets.append(separator)
             button = self._button(item.icon, item.tooltip)
-            button.clicked.connect(lambda _c=False, run=item.run: run())
+            if item.menu:
+                popup = QMenu(button)
+                for action in item.menu:
+                    popup.addAction(action)
+                button.setMenu(popup)
+                button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            else:
+                button.clicked.connect(lambda _c=False, run=item.run: run())
             self._tools.addWidget(button)
             self._tool_widgets.append(button)
             self.tool_buttons[item.key] = button

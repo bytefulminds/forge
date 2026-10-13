@@ -25,6 +25,22 @@ from forge.ui.document_toolbar import ToolItem
 log = logging.getLogger(__name__)
 
 
+def _fits(spec: CommandSpec, language_id: str, selection: str) -> bool:
+    """Whether a command belongs in the right-click menu for this document."""
+    if spec.context is None:
+        return False
+    if spec.context == "selection" and not selection:
+        return False
+    if spec.context_languages and language_id not in spec.context_languages:
+        return False
+    if spec.context_when is not None and selection:
+        try:
+            return bool(spec.context_when(selection))
+        except Exception:
+            return False
+    return True
+
+
 def _tooltip(spec: CommandSpec) -> str:
     text = spec.tooltip() if spec.tooltip else spec.title().replace("&", "").rstrip(".")
     if spec.shortcut:
@@ -94,6 +110,11 @@ class ExtensionHost:
 
     def build_menus(self, tools_menu: QMenu, search_menu: QMenu) -> None:
         for ext in self.extensions:
+            if ext.placement == "language":
+                for spec in ext.commands:
+                    # Not in a menu, so the window carries the shortcut.
+                    self._window.addAction(self._make_action(ext, spec))
+                continue
             if ext.separator_before and ext.placement != "search":
                 tools_menu.addSeparator()
             if ext.placement == "search":
@@ -134,15 +155,11 @@ class ExtensionHost:
 
     # Editor context menu ---------------------------------------------------------
 
-    def extend_context_menu(self, menu: QMenu, has_selection: bool) -> None:
-        """Add the tools that work on the editor (selection) as submenus."""
+    def extend_context_menu(self, menu: QMenu, language_id: str, selection: str) -> None:
+        """Add the tools that fit the document's language and the selected text."""
         first = True
         for ext in self.extensions:
-            specs = [
-                spec
-                for spec in ext.commands
-                if spec.context == "always" or (spec.context == "selection" and has_selection)
-            ]
+            specs = [spec for spec in ext.commands if _fits(spec, language_id, selection)]
             if not specs:
                 continue
             if first:
@@ -162,7 +179,14 @@ class ExtensionHost:
     def toolbar_items(self, language_id: str) -> list[ToolItem]:
         """Buttons for the document toolbar of a document in ``language_id``."""
         items: list[ToolItem] = []
+        options: list[QAction] = []
         for ext in self.extensions:
+            if any(language_id in spec.languages for spec in ext.commands):
+                options.extend(
+                    self.actions[spec.id]
+                    for spec in ext.commands
+                    if spec.checked_setting and spec.id in self.actions
+                )
             for spec in ext.commands:
                 if language_id not in spec.languages or not spec.icon:
                     continue
@@ -175,6 +199,17 @@ class ExtensionHost:
                         separator_before=spec.separator_before and bool(items),
                     )
                 )
+        if options:
+            items.append(
+                ToolItem(
+                    key="options",
+                    icon="settings-2",
+                    tooltip=tr("Options"),
+                    run=lambda: None,
+                    separator_before=bool(items),
+                    menu=options,
+                )
+            )
         return items
 
     # Running -----------------------------------------------------------------

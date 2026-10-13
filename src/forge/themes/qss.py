@@ -142,6 +142,7 @@ QToolButton#docToolButton {{
     padding: 3px; min-width: 18px; min-height: 18px;
 }}
 QToolButton#docToolButton:hover {{ background: {c.hover_bg}; }}
+QToolButton#docToolButton::menu-indicator {{ image: none; width: 0; }}
 QToolButton#docToolButton:pressed {{ background: {c.menu_selected_bg}; }}
 QToolButton#docToolButton:checked {{ background: {c.menu_selected_bg}; }}
 QFrame#docToolSeparator {{ background: {c.border}; margin: 0 4px; }}

@@ -126,3 +126,63 @@ def test_hash_and_dialogs(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None
     assert dates.outputs["ISO 8601 (UTC)"].text() == "2023-11-14T22:13:20Z"
     dates.input.setText("2023-11-14T22:13:20.5Z")
     assert dates.outputs["Unix milliseconds"].text() == "1700000000500"
+
+
+def _submenus(menu) -> dict:  # type: ignore[no-untyped-def]
+    return {a.menu().title(): a.menu() for a in menu.actions() if a.menu() is not None}
+
+
+def test_tools_menu_holds_only_general_tools(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    bar = window.menuWidget().findChild(type(window.menuBar()))  # the Forge menu bar
+    tools = next(a.menu() for a in bar.actions() if a.text() == "T&ools")
+    titles = [a.text() for a in tools.actions() if a.text()]
+    assert "Co&mpare" in titles and "&Hash" in titles and "C&ron" in titles
+    for language in ("&JSON", "&YAML", "&XML Tools", "Mar&kdown", "&CSV"):
+        assert language not in titles
+    # Language commands keep their shortcuts through the window.
+    assert window.extension_host.actions["json.format"] in window.actions()
+    assert window.extension_host.actions["markdown.bold"].shortcut().toString() == "Ctrl+B"
+
+
+def test_language_options_sit_on_the_toolbar(qtbot: QtBot) -> None:
+    from forge.editor.lexers import language_by_id
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    window.set_document_language(language_by_id("xml"))
+    options = window.page_of(tab).toolbar.tool_buttons["options"].menu()
+    assert options is not None
+    assert [a.text() for a in options.actions()] == ["&Auto-close Tags"]
+    window.set_document_language(language_by_id("csv"))
+    options = window.page_of(tab).toolbar.tool_buttons["options"].menu()
+    assert {a.text() for a in options.actions()} == {"Use &Local Time", "Epoch in &Milliseconds"}
+    window.set_document_language(language_by_id("python"))
+    assert "options" not in window.page_of(tab).toolbar.tool_buttons
+
+
+def test_right_click_menu_fits_language_and_selection(qtbot: QtBot) -> None:
+    from forge.editor.lexers import language_by_id
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+
+    def entries(text: str, language: str) -> dict[str, list[str]]:
+        window.set_document_language(language_by_id(language))
+        tab.setText(text)
+        tab.selectAll()
+        return {name: titles(sub) for name, sub in _submenus(tab.build_context_menu()).items()}
+
+    plain = entries("hello world", "python")
+    assert "Base64 &Decode" not in plain["&Encode / Decode"]  # not Base64
+    assert "&HTML Escape" not in plain["&Encode / Decode"]  # not markup
+    assert "C&ron" not in plain and "Decode JW&T" not in plain["&Encode / Decode"]
+
+    assert "Base64 &Decode" in entries("aGVsbG8gd29ybGQ=", "python")["&Encode / Decode"]
+    assert "&HTML Escape" in entries("<b>", "html")["&Encode / Decode"]
+    assert "C&ron" in entries("*/5 * * * *", "yaml")
+    assert "&Epoch to ISO 8601" in entries("at 1700000000", "text")["&Date and Time"]
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln"
+    assert "Decode JW&T" in entries(jwt, "text")["&Encode / Decode"]

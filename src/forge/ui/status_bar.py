@@ -129,6 +129,7 @@ class ForgeStatusBar(QStatusBar):
             self.column.hide()
             return
         delimiter = tab.csv_delimiter
+        self.delimiter.setText(delimiter_name(delimiter))
         before = str(tab.text(line))[:index]
         number = len(split_line(before, delimiter))
         header = split_line(str(tab.text(0)).rstrip("\r\n"), delimiter)

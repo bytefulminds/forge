@@ -11,6 +11,7 @@ _CSV = ("csv",)
 EXTENSION = ExtensionInfo(
     id="forge.csv",
     title=lambda: tr("&CSV"),
+    placement="language",
     commands=(
         CommandSpec(
             "csv.delimiter",

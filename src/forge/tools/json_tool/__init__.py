@@ -11,6 +11,7 @@ _JSON = ("json",)
 EXTENSION = ExtensionInfo(
     id="forge.json",
     title=lambda: tr("&JSON"),
+    placement="language",
     commands=(
         CommandSpec(
             "json.format",

@@ -32,6 +32,10 @@ class CommandSpec:
     # Also in the editor's right-click menu, under the extension's title:
     # "selection" only when text is selected, "always" in every case.
     context: str | None = None
+    # Right-click menu only for documents in these languages (empty: all) ...
+    context_languages: tuple[str, ...] = ()
+    # ... and only when this returns True for the selected text (keep it cheap).
+    context_when: Callable[[str], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -40,7 +44,9 @@ class ExtensionInfo:
     title: Text
     commands: tuple[CommandSpec, ...] = ()
     # "tools": a submenu under Tools; "tools-flat": directly in Tools;
-    # "search": appended to the Search menu (Notepad++ puts Find in Files there).
+    # "search": appended to the Search menu (Notepad++ puts Find in Files there);
+    # "language": no menu, the commands live on the document toolbar of their
+    # languages (shortcuts still work; checkable options go in its options menu).
     placement: str = "tools"
     # A separator above this extension's entry in its menu.
     separator_before: bool = False

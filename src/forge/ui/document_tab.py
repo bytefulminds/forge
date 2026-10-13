@@ -146,8 +146,8 @@ class DocumentTab(ForgeEditor):
 
     # Right-click menu ------------------------------------------------------------
 
-    # Set by the main window: adds the tools for the selection to the menu.
-    context_menu_hook: Callable[[QMenu, bool], None] | None = None
+    # Set by the main window: adds the tools for the language and selection.
+    context_menu_hook: Callable[[QMenu, str, str], None] | None = None
 
     def build_context_menu(self) -> QMenu:
         """Forge's own (translated) edit menu plus the tools for the selection."""
@@ -175,7 +175,8 @@ class DocumentTab(ForgeEditor):
             action.triggered.connect(lambda _c=False, run=slot: run())
             action.setEnabled(enabled)
         if self.context_menu_hook is not None and writable:
-            self.context_menu_hook(menu, has_selection)
+            selection = str(self.selectedText()) if has_selection else ""
+            self.context_menu_hook(menu, self.language.id, selection)
         return menu
 
     def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:

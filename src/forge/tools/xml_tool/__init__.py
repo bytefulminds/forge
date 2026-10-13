@@ -11,6 +11,7 @@ _XML = ("xml",)
 EXTENSION = ExtensionInfo(
     id="forge.xml",
     title=lambda: tr("&XML Tools"),
+    placement="language",
     commands=(
         CommandSpec(
             "xml.pretty",

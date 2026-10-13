@@ -850,3 +850,14 @@ def _all_items(item):  # type: ignore[no-untyped-def]
     yield item
     for index in range(item.childCount()):
         yield from _all_items(item.child(index))
+
+
+def test_status_bar_delimiter_follows_typing(qtbot: QtBot) -> None:
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    window.set_document_language(language_by_id("csv"))
+    tab.setText("a;b\n1;2\n")
+    tab.setCursorPosition(1, 0)
+    window.status.update_position(tab)
+    assert window.status.delimiter.text() == "Semicolon"

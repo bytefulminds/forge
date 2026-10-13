@@ -11,6 +11,7 @@ _MD = ("markdown",)
 EXTENSION = ExtensionInfo(
     id="forge.markdown",
     title=lambda: tr("Mar&kdown"),
+    placement="language",
     commands=(
         CommandSpec(
             "markdown.bold",
