@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 from pathlib import Path
 
 from forge.core.encoding import UTF16_LE, TextEncoding
@@ -29,8 +30,10 @@ def test_save_preserves_encoding_and_bom(tmp_path: Path) -> None:
 def test_save_is_atomic_and_keeps_permissions(tmp_path: Path) -> None:
     path = tmp_path / "script.sh"
     path.write_text("old\n", newline="")
-    os.chmod(path, 0o750)
+    if sys.platform != "win32":  # Windows has no Unix permission bits
+        os.chmod(path, 0o750)
     save_text(path, "new\n", TextEncoding())
     assert path.read_text() == "new\n"
-    assert stat.S_IMODE(path.stat().st_mode) == 0o750
+    if sys.platform != "win32":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o750
     assert [p.name for p in tmp_path.iterdir()] == ["script.sh"]
