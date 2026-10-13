@@ -1,27 +1,23 @@
-# Forge CI pipeline.
-# Phase (a): lint, typecheck and test. Build and release stages follow in phase (f).
+# GitLab CI for Forge. Platforms in order of focus: macOS, Linux, Windows.
 #
-# Runner tags are variables so they can be changed without editing jobs.
-# The jobs expect a Docker executor; the image pins Python exactly.
-
-variables:
-  LINUX_RUNNER_TAG: "linux"
-  MACOS_RUNNER_TAG: "macos"
-  PYTHON_IMAGE: "python:3.12.13-slim-bookworm"
-  UV_VERSION: "0.11.32"
-  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
-  UV_FROZEN: "1"
-  QT_QPA_PLATFORM: "offscreen"
-
-stages:
-  - lint
-  - typecheck
-  - test
+# lint, typecheck and test run on every pipeline, on GitLab's shared Linux
+# runners (no tags, as in Archy). test:macos and test:windows run the same
+# tests on our own group runners (tags: macos / windows, shell executor);
+# they are started by hand and may fail without blocking the pipeline.
+# Build and release stages for the three platforms follow in phase (f).
+#
+# uv installs exactly what uv.lock pins. The image only provides a Python
+# 3.12 to bootstrap uv; uv itself installs the Python from .python-version
+# (3.12.13) when the image's patch version differs.
+#
+# The test job installs the system libraries Qt needs to run offscreen
+# ($QT_RUNTIME_LIBS: OpenGL/EGL, fontconfig, xkbcommon, D-Bus, audio, and NSS
+# and the X extensions QtWebEngine links against), so the UI tests run in CI
+# instead of skipping. The image is pinned to Debian bookworm so those package
+# names stay valid.
 
 default:
-  image: $PYTHON_IMAGE
-  tags:
-    - $LINUX_RUNNER_TAG
+  image: python:3.12-slim-bookworm
   cache:
     key:
       files:
@@ -32,6 +28,22 @@ default:
     - pip install --quiet "uv==${UV_VERSION}"
     - uv sync --frozen
 
+stages:
+  - lint
+  - test
+
+variables:
+  UV_VERSION: "0.11.32"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  UV_FROZEN: "1"
+  UV_LINK_MODE: "copy"
+  QT_QPA_PLATFORM: "offscreen"
+  QT_RUNTIME_LIBS: >-
+    libgl1 libegl1 libgbm1 libdrm2 libfontconfig1 libfreetype6 libxkbcommon0
+    libglib2.0-0 libdbus-1-3 libasound2 libpulse0 libgssapi-krb5-2
+    libnss3 libnspr4 libx11-6 libx11-xcb1 libxcb1 libxext6 libxfixes3 libxrender1
+    libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxkbfile1
+
 lint:
   stage: lint
   script:
@@ -39,21 +51,81 @@ lint:
     - uv run ruff format --check .
 
 typecheck:
-  stage: typecheck
+  stage: lint
   script:
+    # With the optional web extra, so the rich Markdown preview is checked too.
+    - uv sync --frozen --extra web
     - uv run mypy
 
 test:
   stage: test
   before_script:
-    # Runtime libraries Qt needs for the headless (offscreen) platform.
     - apt-get update -qq
-    - apt-get install -y -qq --no-install-recommends
-      libgl1 libegl1 libxkbcommon0 libfontconfig1 libglib2.0-0 libdbus-1-3 > /dev/null
+    - apt-get install -y -qq --no-install-recommends $QT_RUNTIME_LIBS > /dev/null
     - pip install --quiet "uv==${UV_VERSION}"
     - uv sync --frozen
   script:
     - uv run pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+# --- our own runners ----------------------------------------------------------
+# Shell executor: uv is installed at the pinned version into .uv-bin and kept,
+# with the venv and uv's cache, between runs (GIT_CLEAN_FLAGS).
+
+test:macos:
+  stage: test
+  tags:
+    - macos                      # our macOS runner (Apple Silicon)
+  rules:
+    - when: manual
+      allow_failure: true
+  variables:
+    GIT_CLEAN_FLAGS: -ffdx -e .venv/ -e .uv-cache/ -e .uv-bin/
+  cache: []
+  before_script:
+    # A runner started by launchd does not have Homebrew on its PATH.
+    - eval "$(/opt/homebrew/bin/brew shellenv)" || true
+    - export PATH="$CI_PROJECT_DIR/.uv-bin:$PATH"
+    - |
+      if ! uv --version 2>/dev/null | grep -q "uv ${UV_VERSION}"; then
+        curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" \
+          | env UV_INSTALL_DIR="$CI_PROJECT_DIR/.uv-bin" UV_NO_MODIFY_PATH=1 sh
+      fi
+    - uv sync --frozen
+  script:
+    - uv run pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+test:windows:
+  stage: test
+  tags:
+    - windows                    # our Windows runner (PowerShell)
+  rules:
+    - when: manual
+      allow_failure: true
+  variables:
+    GIT_CLEAN_FLAGS: -ffdx -e .venv/ -e .uv-cache/ -e .uv-bin/
+  cache: []
+  before_script:
+    - $env:PATH = "$env:CI_PROJECT_DIR\.uv-bin;$env:PATH"
+    - |
+      $installed = (uv --version 2>$null) -join ""
+      if ($installed -notmatch "uv $env:UV_VERSION") {
+        $env:UV_INSTALL_DIR = "$env:CI_PROJECT_DIR\.uv-bin"
+        $env:UV_NO_MODIFY_PATH = "1"
+        irm "https://astral.sh/uv/$env:UV_VERSION/install.ps1" | iex
+      }
+    - uv sync --frozen
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  script:
+    - uv run pytest -q --junitxml=report.xml
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   artifacts:
     when: always
     reports:

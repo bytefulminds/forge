@@ -13,7 +13,8 @@ from pathlib import Path
 
 import platformdirs
 
-_APP_DIR_NAME = "Forge" if sys.platform == "darwin" else "forge"
+# Linux uses lower case folder names (~/.config/forge); macOS and Windows "Forge".
+_APP_DIR_NAME = "forge" if sys.platform.startswith("linux") else "Forge"
 
 
 def _override() -> Path | None:

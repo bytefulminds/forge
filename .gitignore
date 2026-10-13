@@ -22,6 +22,7 @@ __pycache__/
 .venv/
 venv/
 .uv-cache/
+.uv-bin/
 
 # Tooling caches
 .mypy_cache/

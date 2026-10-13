@@ -2,7 +2,7 @@
 
 Everything Forge can do, per topic. New to Forge? Start with the [README](README.md).
 
-Shortcuts are written for Linux. On macOS, `Ctrl` is the `Cmd` key unless a line says
+Shortcuts are written for Linux and Windows. On macOS, `Ctrl` is the `Cmd` key unless a line says
 otherwise; the menus always show the right keys for your system.
 
 **Contents**
@@ -33,6 +33,7 @@ otherwise; the menus always show the right keys for your system.
 Forge runs from source with [uv](https://docs.astral.sh/uv/getting-started/installation/),
 version `0.11.32` or newer. uv installs Python `3.12.13` and every dependency at the exact
 version Forge was tested with.
+The same commands work in Terminal (macOS), a Linux shell and PowerShell (Windows).
 
 ```sh
 git clone https://gitlab.com/bytefulminds/forge.git
@@ -53,7 +54,8 @@ From top to bottom:
   - Click `+`, or double-click the empty part of the tab bar, for a new document.
   - Drag tabs to reorder them.
   - Right-click a tab for Close, Close Others, Close All, Copy Full Path,
-    Copy File Name and Show in Finder (macOS) or Open Containing Folder (Linux).
+    Copy File Name and Show in Finder (macOS), Open Containing Folder (Linux) or Show in
+    Explorer (Windows).
 - **Document toolbar** with tools for the document's language (section 7).
 - **Editor**, and next to it or instead of it a preview, if the language has one.
 - **Status bar:**
@@ -84,7 +86,8 @@ type a name without an extension. If you pick "All files", Forge keeps the name 
 typed.
 
 The Open and Save dialogs have Forge's look. If you prefer your system's own dialogs
-(Finder on macOS, GTK or KDE on Linux), turn on *Use the system file dialogs* in Preferences.
+(Finder on macOS, GTK or KDE on Linux, Explorer on Windows), turn on *Use the system file
+dialogs* in Preferences.
 
 ### Sessions
 
@@ -115,7 +118,8 @@ status bar) has two kinds of choices:
 Supported: UTF-8, UTF-8 with BOM, UTF-16 LE and BE, Windows-1252 and ISO-8859-1.
 
 Line endings (Edit > EOL Conversion, or the status bar) can be Windows (CR LF), Unix (LF) or
-Macintosh (CR). Forge keeps the line endings a file already has.
+Macintosh (CR). Forge keeps the line endings a file already has. New documents use LF on
+macOS and Linux and CR LF on Windows, as Notepad++ does.
 
 ## 4. Editing
 
@@ -353,7 +357,7 @@ Forge stays responsive with big files:
 
 ## 17. Keyboard shortcuts
 
-| Action | Linux | macOS |
+| Action | Linux and Windows | macOS |
 |---|---|---|
 | New, Open, Save | `Ctrl+N`, `Ctrl+O`, `Ctrl+S` | `Cmd+N`, `Cmd+O`, `Cmd+S` |
 | Save As | `Ctrl+Alt+S` | `Cmd+Shift+S` |
@@ -378,11 +382,11 @@ Forge stays responsive with big files:
 
 ## 18. Where Forge keeps its files
 
-| | Linux | macOS |
-|---|---|---|
-| Settings | `~/.config/forge/settings.toml` | `~/Library/Application Support/Forge/settings.toml` |
-| Session and unsaved text | `~/.cache/forge/` | `~/Library/Caches/Forge/` |
-| Logs | `~/.local/state/forge/log/` | `~/Library/Logs/Forge/` |
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Settings | `~/Library/Application Support/Forge/settings.toml` | `~/.config/forge/settings.toml` | `%LOCALAPPDATA%\Forge\settings.toml` |
+| Session and unsaved text | `~/Library/Caches/Forge/` | `~/.cache/forge/` | `%LOCALAPPDATA%\Forge\Cache\` |
+| Logs | `~/Library/Logs/Forge/` | `~/.local/state/forge/log/` | `%LOCALAPPDATA%\Forge\Logs\` |
 
 Set `FORGE_HOME=/some/folder` to keep everything in one folder instead.
 

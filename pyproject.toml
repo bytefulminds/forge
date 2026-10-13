@@ -59,6 +59,8 @@ required-version = ">=0.11.32"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# Package caches inside the project (CI keeps uv's cache here).
+extend-exclude = [".uv-cache", ".uv-bin", ".cache"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "TID"]
@@ -88,6 +90,17 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["PyQt6.Qsci"]
 ignore_missing_imports = true
+
+# Qt WebEngine is the optional "web" extra. CI type checks with it installed;
+# without it these imports are untyped instead of errors.
+[[tool.mypy.overrides]]
+module = ["PyQt6.QtWebEngineCore", "PyQt6.QtWebEngineWidgets"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["forge.ui.web_preview"]
+disallow_subclassing_any = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

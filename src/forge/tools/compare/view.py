@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.Qsci import QsciScintilla
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QHBoxLayout,
@@ -133,7 +134,17 @@ class CompareView(QWidget):
 
     # Content ---------------------------------------------------------------
 
+    @staticmethod
+    def _prepare(viewer: QsciScintilla) -> None:
+        """One text line per row on both sides: no wrapping, and a horizontal
+        scrollbar on both so they show the same number of rows."""
+        viewer.setWrapMode(_Q.WrapMode.WrapNone)
+        viewer.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        viewer.SendScintilla(_Q.SCI_SETSCROLLWIDTHTRACKING, 1)
+        viewer.SendScintilla(_Q.SCI_SETENDATLASTLINE, 1)
+
     def _fill(self, viewer: QsciScintilla, rows: list[Row]) -> None:
+        self._prepare(viewer)
         viewer.SendScintilla(_Q.SCI_MARKERDELETEALL, -1)
         viewer.clearMarginText()
         viewer.setReadOnly(False)
@@ -199,38 +210,50 @@ class CompareView(QWidget):
     # Navigation --------------------------------------------------------------
 
     def _link_scrolling(self) -> None:
+        """Keep both sides on the same rows. Scintilla reports every scroll
+        (wheel, scrollbar, keyboard, jumps) through SCN_UPDATEUI."""
         for source, target in ((self.left, self.right), (self.right, self.left)):
-            vertical = source.verticalScrollBar()
-            horizontal = source.horizontalScrollBar()
-            if vertical is not None:
-                vertical.valueChanged.connect(
-                    lambda value, t=target: self._sync(t.verticalScrollBar(), value)
-                )
-            if horizontal is not None:
-                horizontal.valueChanged.connect(
-                    lambda value, t=target: self._sync(t.horizontalScrollBar(), value)
-                )
+            source.SCN_UPDATEUI.connect(
+                lambda updated, s=source, t=target: self._follow(s, t, updated)
+            )
 
-    def _sync(self, bar: object, value: int) -> None:
-        if self._syncing or bar is None:
+    def _follow(self, source: QsciScintilla, target: QsciScintilla, updated: int) -> None:
+        if self._syncing or not updated & (_Q.SC_UPDATE_V_SCROLL | _Q.SC_UPDATE_H_SCROLL):
             return
         self._syncing = True
         try:
-            bar.setValue(value)  # type: ignore[attr-defined]
+            first = int(source.SendScintilla(_Q.SCI_GETFIRSTVISIBLELINE))
+            if int(target.SendScintilla(_Q.SCI_GETFIRSTVISIBLELINE)) != first:
+                target.SendScintilla(_Q.SCI_SETFIRSTVISIBLELINE, first)
+            offset = int(source.SendScintilla(_Q.SCI_GETXOFFSET))
+            if int(target.SendScintilla(_Q.SCI_GETXOFFSET)) != offset:
+                target.SendScintilla(_Q.SCI_SETXOFFSET, offset)
         finally:
             self._syncing = False
+
+    def first_visible_rows(self) -> tuple[int, int]:
+        return (
+            int(self.left.SendScintilla(_Q.SCI_GETFIRSTVISIBLELINE)),
+            int(self.right.SendScintilla(_Q.SCI_GETFIRSTVISIBLELINE)),
+        )
 
     def jump(self, direction: int) -> None:
         blocks = self.comparison.blocks
         if not blocks:
             return
-        current, _ = self.left.getCursorPosition()
+        focused = self.right if self.right.hasFocus() else self.left
+        current, _ = focused.getCursorPosition()
         if direction > 0:
             target = next((b for b in blocks if b > current), blocks[0])
         else:
             target = next((b for b in reversed(blocks) if b < current), blocks[-1])
-        for viewer in (self.left, self.right):
-            viewer.setCursorPosition(target, 0)
-            viewer.SendScintilla(_Q.SCI_ENSUREVISIBLEENFORCEPOLICY, target)
-        self.left.setFirstVisibleLine(max(0, target - 3))
-        self.left.setFocus()
+        first = max(0, target - 3)
+        self._syncing = True
+        try:
+            for viewer in (self.left, self.right):
+                viewer.setCursorPosition(target, 0)
+                viewer.SendScintilla(_Q.SCI_SETFIRSTVISIBLELINE, first)
+                viewer.SendScintilla(_Q.SCI_SETXOFFSET, 0)
+        finally:
+            self._syncing = False
+        focused.setFocus()

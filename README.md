@@ -4,22 +4,22 @@
 
 # Forge
 
-**Fast, lightweight text editor for macOS and Linux, in the spirit of Notepad++.</strong><br>
+**Fast, lightweight text editor for macOS, Linux and Windows, in the spirit of Notepad++.
   Open a file, get to work. Tools for JSON, CSV, Markdown, XML and YAML are built in,
   not bolted on.**
 
-**Version 0.1.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for Windows, macOS and Linux
+**Version 0.1.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
 
 [![pipeline](https://gitlab.com/bytefulminds/Forge/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/Forge/-/pipelines)
-![license: GLP](https://img.shields.io/badge/license-GPL--3.0-5CC8E)
-![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-CD7E45)
+![license: GPL](https://img.shields.io/badge/license-GPL--3.0-5CC8E8)
+![platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-CD7E45)
 
 </div>
 
 ![Forge with a Markdown document and its live preview, including a Mermaid diagram](docs/images/forge-markdown.png)
 
 > **Status:** early development. Forge runs from source today; packaged downloads
-> (AppImage and a macOS app) come later.
+> (a macOS app, an AppImage and a Windows installer) come later.
 
 ## Why Forge
 
@@ -28,7 +28,7 @@
 - **Knows your files.** Every document gets a toolbar with the tools for its language:
   formatting, validation, previews and conversions, one click away.
 - **Looks the same everywhere.** Forge draws its own window, menus and dialogs, in a dark
-  and a light theme, on macOS and on Linux.
+  and a light theme, on macOS, Linux and Windows.
 - **Never loses work.** Unsaved text and open tabs come back after a restart, and Forge
   notices when a file changes on disk.
 
@@ -90,6 +90,7 @@ uv sync
 uv run forge
 ```
 
+The same commands work in Terminal (macOS), a Linux shell and PowerShell (Windows).
 Open files directly with `uv run forge notes.md data.csv`.
 
 For the full Markdown preview with Mermaid diagrams, install the optional browser engine
@@ -97,16 +98,16 @@ For the full Markdown preview with Mermaid diagrams, install the optional browse
 
 ### First steps
 
-| To | Press (Linux) | Press (macOS) |
+| To | macOS | Linux and Windows |
 |---|---|---|
-| Open a file | `Ctrl+O` | `Cmd+O` |
-| Save as | `Ctrl+Alt+S` | `Cmd+Shift+S` |
-| Find, replace | `Ctrl+F`, `Ctrl+H` | `Cmd+F`, `Cmd+Option+F` |
-| Find in files | `Ctrl+Shift+F` | `Cmd+Shift+F` |
-| Go to line | `Ctrl+G` | `Cmd+L` |
+| Open a file | `Cmd+O` | `Ctrl+O` |
+| Save as | `Cmd+Shift+S` | `Ctrl+Alt+S` |
+| Find, replace | `Cmd+F`, `Cmd+Option+F` | `Ctrl+F`, `Ctrl+H` |
+| Find in files | `Cmd+Shift+F` | `Ctrl+Shift+F` |
+| Go to line | `Cmd+L` | `Ctrl+G` |
 | Toggle comment | `Ctrl+Q` | `Ctrl+Q` |
-| Show the preview | `Ctrl+Shift+V` | `Cmd+Shift+V` |
-| Preferences | `Ctrl+,` | `Cmd+,` |
+| Show the preview | `Cmd+Shift+V` | `Ctrl+Shift+V` |
+| Preferences | `Cmd+,` | `Ctrl+,` |
 
 **Read the [manual](MANUAL.md)** for every feature, tool and shortcut.
 

@@ -45,6 +45,8 @@ class TabState:
     first_visible_line: int = 0
     # "text", "split" or "preview" (Markdown, CSV and JSON documents).
     view_mode: str = "text"
+    # CSV delimiter chosen by the user; empty means "detect".
+    csv_delimiter: str = ""
 
 
 @dataclass

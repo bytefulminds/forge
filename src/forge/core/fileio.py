@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,6 +53,23 @@ def load_utf8(path: Path) -> LoadedBytes:
     return LoadedBytes(utf8=utf8, encoding=encoding, eol=detect_eol(sample))
 
 
+# Windows refuses to replace a file another program briefly holds open (virus
+# scanners, search indexers, cloud sync): try again for about a second.
+_REPLACE_ATTEMPTS = 20
+_REPLACE_WAIT_SECONDS = 0.05
+
+
+def _replace(source: Path, target: Path) -> None:
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_WAIT_SECONDS)
+
+
 def save_text(path: Path, text: str, encoding: TextEncoding) -> None:
     """Write ``text`` to ``path`` atomically (temp file + rename).
 
@@ -69,7 +87,7 @@ def save_text(path: Path, text: str, encoding: TextEncoding) -> None:
             os.fsync(handle.fileno())
         if path.exists():
             shutil.copymode(path, tmp)
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise

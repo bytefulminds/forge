@@ -317,4 +317,5 @@
 "A quote is opened here but never closed." = "Hier wordt een aanhalingsteken geopend maar nooit gesloten."
 "This row has {found} columns; the first row has {expected}." = "Deze rij heeft {found} kolommen; de eerste rij heeft er {expected}."
 "Use the system file dialogs" = "De bestandsvensters van het systeem gebruiken"
-"Finder on macOS, GTK or KDE on Linux, instead of Forge styled dialogs" = "Finder op macOS, GTK of KDE op Linux, in plaats van vensters in Forge-stijl"
+"Finder on macOS, GTK or KDE on Linux, Explorer on Windows, instead of Forge styled dialogs" = "Finder op macOS, GTK of KDE op Linux, Verkenner op Windows, in plaats van vensters in Forge-stijl"
+"Show in Explorer" = "Weergeven in Verkenner"

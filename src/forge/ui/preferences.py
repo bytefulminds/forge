@@ -154,7 +154,10 @@ class PreferencesDialog(FramedDialog):
         form.addRow("", self.remember_session)
         self.native_dialogs = QCheckBox(tr("Use the system file dialogs"), self)
         self.native_dialogs.setToolTip(
-            tr("Finder on macOS, GTK or KDE on Linux, instead of Forge styled dialogs")
+            tr(
+                "Finder on macOS, GTK or KDE on Linux, Explorer on Windows, "
+                "instead of Forge styled dialogs"
+            )
         )
         self.native_dialogs.setChecked(self.settings.general.native_file_dialogs)
         form.addRow("", self.native_dialogs)

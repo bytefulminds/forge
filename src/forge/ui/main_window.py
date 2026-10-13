@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import replace
@@ -83,6 +84,19 @@ from forge.ui.title_bar import EdgeResizer, WindowHeader
 log = logging.getLogger(__name__)
 
 IS_MAC = sys.platform == "darwin"
+
+
+def reveal_command(path: Path, platform: str = sys.platform) -> list[str] | str | None:
+    """Command that shows ``path`` selected in the file manager; ``None`` on
+    Linux, where Forge opens the folder instead. Explorer needs the quotes
+    exactly as written, so Windows gets a command line string."""
+    if platform == "darwin":
+        return ["open", "-R", str(path)]
+    if platform == "win32":
+        return f'explorer /select,"{path}"'
+    return None
+
+
 NEW_TAB_BUTTON_SIZE = 24
 # Tabs have a 4 px top margin; this centers the close button on the visible tab.
 TAB_BUTTON_TOP_OFFSET = 4
@@ -147,6 +161,11 @@ class MainWindow(QMainWindow):
         # same on macOS, Linux and Windows.
         self._frameless = True
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        if sys.platform == "win32":
+            # Without these a frameless window does not minimize when its
+            # taskbar button is clicked, and has no taskbar window menu.
+            self.setWindowFlag(Qt.WindowType.WindowMinMaxButtonsHint, True)
+            self.setWindowFlag(Qt.WindowType.WindowSystemMenuHint, True)
         self.settings = settings
         self.theme: Theme = get_theme(settings.appearance.theme)
         self._applying_theme = False
@@ -452,7 +471,10 @@ class MainWindow(QMainWindow):
         path = tab.doc.path
         copy_path = menu.addAction(tr("Copy Full Path"), lambda: self._copy(str(path)))
         copy_name = menu.addAction(tr("Copy File Name"), lambda: self._copy(tab.title))
-        reveal_text = tr("Show in Finder") if IS_MAC else tr("Open Containing Folder")
+        reveal_text = {
+            "darwin": tr("Show in Finder"),
+            "win32": tr("Show in Explorer"),
+        }.get(sys.platform, tr("Open Containing Folder"))
         reveal = menu.addAction(reveal_text, lambda: self._reveal(path))
         for action in (copy_path, reveal):
             if action is not None:
@@ -469,8 +491,16 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _reveal(path: Path | None) -> None:
-        if path is not None:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
+        if path is None:
+            return
+        command = reveal_command(path)
+        if command is not None:
+            try:
+                subprocess.Popen(command)
+                return
+            except OSError:
+                log.warning("Could not show %s in the file manager", path, exc_info=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
     # File commands -------------------------------------------------------
 
@@ -881,6 +911,7 @@ class MainWindow(QMainWindow):
                     cursor_index=index,
                     first_visible_line=tab.firstVisibleLine(),
                     view_mode=self.page_of(tab).mode if tab.page is not None else "text",
+                    csv_delimiter=tab.csv_delimiter_choice or "",
                 )
             )
         return state, backups
@@ -913,12 +944,16 @@ class MainWindow(QMainWindow):
             return
         active = restored[state.active] if 0 <= state.active < len(restored) else None
         self._show(active or tabs[-1])
+        # Languages are set after the tabs are shown: show the current state.
+        self._on_current_changed(self.tabs.currentIndex())
 
     def _restore_tab(self, state: TabState) -> DocumentTab | None:
         path = Path(state.path) if state.path else None
         language = language_by_id(state.language)
 
         def place_cursor(tab: DocumentTab) -> None:
+            if state.csv_delimiter:
+                tab.set_csv_delimiter(state.csv_delimiter)
             tab.setCursorPosition(state.cursor_line, state.cursor_index)
             tab.setFirstVisibleLine(state.first_visible_line)
             if state.view_mode != "text":

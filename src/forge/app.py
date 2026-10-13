@@ -45,6 +45,19 @@ class ForgeApplication(QApplication):
         return pending
 
 
+def _set_windows_app_id() -> None:
+    """Own taskbar button and icon on Windows (instead of Python's)."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    try:
+        shell32 = ctypes.windll.shell32
+        shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except (AttributeError, OSError):
+        log.warning("Could not set the Windows app id", exc_info=True)
+
+
 def _app_icon() -> QIcon:
     data = resources.files("forge.resources.icons").joinpath("forge.svg").read_bytes()
     pixmap = QPixmap()
@@ -56,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     setup_logging()
     log.info("Starting %s %s", APP_NAME, __version__)
+    _set_windows_app_id()
 
     # Required by the optional Qt WebEngine preview, which loads after start.
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

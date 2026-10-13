@@ -761,3 +761,21 @@ def test_framed_message_box_answers(qtbot: QtBot) -> None:
     save = next(b for b in box.findChildren(QPushButton) if b.isDefault())
     save.click()
     assert box.answer == Button.Save
+
+
+def test_restored_untitled_tab_shows_its_language(qtbot: QtBot) -> None:
+    first = make_window(qtbot)
+    tab = first.current_tab()
+    assert tab is not None
+    first.set_document_language(language_by_id("csv"))
+    tab.setText("a;b\n1;2\n")
+    tab.set_csv_delimiter("|")
+    first.close()
+
+    second = make_window(qtbot)
+    restored = second.current_tab()
+    assert restored is not None and restored.language.id == "csv"
+    assert second.status.language.text() == "CSV"
+    assert not second.status.delimiter.isHidden()
+    assert restored.csv_delimiter_choice == "|"
+    assert "csv.sort_asc" in second.page_of(restored).toolbar.tool_buttons

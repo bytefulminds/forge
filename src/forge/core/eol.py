@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from enum import Enum
 
 
@@ -15,7 +16,12 @@ class Eol(Enum):
         return {"LF": "Unix (LF)", "CRLF": "Windows (CR LF)", "CR": "Macintosh (CR)"}[self.name]
 
 
-DEFAULT_EOL = Eol.LF
+def default_eol(platform: str = sys.platform) -> Eol:
+    """Line ending for new documents: CR LF on Windows (as Notepad++), else LF."""
+    return Eol.CRLF if platform == "win32" else Eol.LF
+
+
+DEFAULT_EOL = default_eol()
 
 
 def detect_eol(text: str, sample_size: int = 1_000_000) -> Eol:

@@ -119,3 +119,48 @@ def test_find_in_files_panel(qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.M
     panel.wait()
     qtbot.waitUntil(lambda: "replaced" in panel.status.text(), timeout=3000)
     assert (tmp_path / "y.md").read_text() == "say hi\n"
+
+
+def test_compare_sides_scroll_together_line_by_line(qtbot: QtBot, tmp_path: Path) -> None:
+    from PyQt6.QtWidgets import QApplication
+
+    long = "x" * 400  # would wrap differently on both sides with word wrap on
+    old = [f"line {i} {long if i % 7 == 0 else ''}" for i in range(200)]
+    new = list(old)
+    new[20] = "changed 20"
+    del new[60:63]
+    new.insert(120, "added")
+    file = tmp_path / "a.txt"
+    file.write_text("\n".join(old) + "\n")
+    window = make_window(qtbot)
+    window.settings.editor.word_wrap = True
+    window.resize(900, 500)
+    window.show()
+    tab = window.open_path(file)
+    assert tab is not None
+    tab.setText("\n".join(new) + "\n")
+    window.extension_host.run_command("compare.saved")
+    view = window.tabs.currentWidget()
+    assert isinstance(view, CompareView)
+    assert view.left.lines() == view.right.lines()
+
+    def settle() -> None:
+        for _ in range(5):
+            QApplication.processEvents()
+
+    settle()
+    view.left.SendScintilla(view.left.SCI_SETFIRSTVISIBLELINE, 90)
+    settle()
+    assert view.first_visible_rows() == (90, 90)
+    view.right.SendScintilla(view.right.SCI_LINESCROLL, 0, -25)
+    settle()
+    assert view.first_visible_rows() == (65, 65)
+    for _ in range(4):
+        view.jump(1)
+        settle()
+        left, right = view.first_visible_rows()
+        assert left == right
+        assert view.left.getCursorPosition()[0] == view.right.getCursorPosition()[0]
+    view.jump(-1)
+    settle()
+    assert view.first_visible_rows()[0] == view.first_visible_rows()[1]
