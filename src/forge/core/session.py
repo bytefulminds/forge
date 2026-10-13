@@ -47,6 +47,8 @@ class TabState:
     view_mode: str = "text"
     # CSV delimiter chosen by the user; empty means "detect".
     csv_delimiter: str = ""
+    # "header" or "none" when the user chose; empty means "detect".
+    csv_header: str = ""
 
 
 @dataclass

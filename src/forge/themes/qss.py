@@ -214,6 +214,16 @@ QFileDialog QToolButton {{
 QFileDialog QToolButton:hover {{ background: {c.hover_bg}; }}
 QFileDialog QLabel {{ color: {c.text_muted}; }}
 QSizeGrip {{ width: 12px; height: 12px; }}
+QLabel#aboutVersion {{ color: {c.text}; font-size: 15px; font-weight: 600; }}
+QLabel#aboutCredits {{ color: {c.text_muted}; font-size: 12px; }}
+QFrame#aboutRule {{ background: {c.border}; }}
+QPushButton#aboutLink {{
+    background: transparent; color: {c.accent}; border: 1px solid {c.border_strong};
+    border-radius: 6px; padding: 5px 12px;
+}}
+QPushButton#aboutLink:hover {{ background: {c.hover_bg}; }}
+QLabel#cronSummary {{ color: {c.text}; font-size: 14px; font-weight: 600; }}
+QLabel#resultNote {{ color: {c.text_muted}; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};
     border-radius: 6px; padding: 6px 16px; min-height: 18px; font-weight: 500;

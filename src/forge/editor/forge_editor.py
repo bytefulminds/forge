@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPoint, QTimer
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import QToolTip
 
-from forge.core.csvtext import detect_delimiter
+from forge.core.csvtext import detect_delimiter, has_header, split_records
 from forge.core.eol import Eol
 from forge.core.settings import EditorSettings
 from forge.editor import decorations
@@ -68,6 +68,9 @@ class ForgeEditor(QsciScintilla):
         self._language: Language = PLAIN_TEXT
         self._lexer: QsciLexer | None = None
         self._csv_delimiter: str | None = None
+        self._csv_header: bool | None = None  # None: detect from the text
+        self._csv_header_detected: bool | None = None  # cache, reset on edits
+        self.textChanged.connect(self._forget_csv_header)
         self._keyword_apis: QsciAPIs | None = None
         self._large_file = False
         self._load_cancelled = False
@@ -323,6 +326,29 @@ class ForgeEditor(QsciScintilla):
         self._csv_delimiter = delimiter or None
         if isinstance(self._lexer, CsvLexer):
             self._lexer.set_delimiter(self._csv_delimiter)
+
+    @property
+    def csv_header(self) -> bool:
+        """Whether the first CSV row holds column names: chosen or detected."""
+        if self._csv_header is not None:
+            return self._csv_header
+        if self._csv_header_detected is None:
+            length = min(int(self.SendScintilla(self.SCI_GETLENGTH)), 64_000)
+            sample = bytes(self.bytes(0, length).data())[:length].decode("utf-8", "replace")
+            records = split_records(sample, self.csv_delimiter)
+            self._csv_header_detected = has_header(records[:200], self.csv_delimiter)
+        return self._csv_header_detected
+
+    @property
+    def csv_header_choice(self) -> bool | None:
+        """``True`` / ``False`` when the user chose, ``None`` to detect."""
+        return self._csv_header
+
+    def set_csv_header(self, header: bool | None) -> None:
+        self._csv_header = header
+
+    def _forget_csv_header(self) -> None:
+        self._csv_header_detected = None
 
     # Large files ---------------------------------------------------------
 

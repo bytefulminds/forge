@@ -27,6 +27,8 @@
   the heavy features, as Notepad++ does, so even huge logs scroll smoothly.
 - **Knows your files.** Every document gets a toolbar with the tools for its language:
   formatting, validation, previews and conversions, one click away.
+- **A developer's toolbox built in.** Hashes, Base64 and URL encoding, letter case,
+  UUIDs, timestamps and cron expressions, from the Tools menu or a right click.
 - **Looks the same everywhere.** Forge draws its own window, menus and dialogs, in a dark
   and a light theme, on macOS, Linux and Windows.
 - **Never loses work.** Unsaved text and open tabs come back after a restart, and Forge
@@ -43,18 +45,33 @@ bold, headings, lists, links, code blocks and tables.
 ### JSON: format, validate, explore
 
 Format or minify with one click. Errors are underlined at the exact spot as you type,
-and the tree view shows the structure of the document.
+and the tree view shows the structure of the document: click a key in the tree and Forge
+selects it in the code.
 
-![JSON document next to its tree view](docs/images/forge-json.png)
+![JSON document next to its tree view, with the clicked key selected in the code](docs/images/forge-json.png)
 
 ### CSV that understands your data
 
 Every column has its own color, and a table view sits next to the text. Forge detects
-the delimiter (comma, semicolon, tab or pipe) and the status bar shows the column name
-at the cursor. Sort by a column, align columns, remove duplicate rows, convert Unix
-timestamps to ISO 8601 and back, or export to JSON or a Markdown table.
+the delimiter (comma, semicolon, tab or pipe) and whether the first row is a header, and
+you can override both per file. The status bar shows the column name at the cursor.
+Sort by a column, align columns, remove duplicate rows, convert Unix timestamps to
+ISO 8601 and back, or export to JSON or a Markdown table.
 
 ![CSV file with colored columns, a table view and the column name in the status bar](docs/images/forge-csv.png)
+
+### Developer tools, one right click away
+
+Select text and right-click: encode or decode Base64, URLs, HTML and JSON strings, decode
+a JWT, change the letter case (camelCase, snake_case, kebab-case and more), sort or
+deduplicate lines, or hash it with MD5, SHA-1, SHA-256 and SHA-512. The Tools menu also
+hashes whole files, inserts UUIDs (version 4 or time ordered version 7, one or many) and
+the current date and time, converts between timestamps and dates, and explains cron
+expressions with their next run times.
+
+![Right-click menu on a selection with the Text tools open](docs/images/forge-dev-tools.png)
+
+![Cron expression explained in plain words with the next ten runs](docs/images/forge-cron.png)
 
 ### Compare two versions
 
@@ -77,6 +94,13 @@ checks for Python, JSON, YAML, XML, TOML and CSV, autocomplete from the words in
 file, and Notepad++ shortcuts that your fingers already know.
 
 ![Python file in the light theme with rainbow brackets and an underlined syntax error](docs/images/forge-light.png)
+
+### Yours in two languages
+
+The whole interface is available in English and Dutch, and follows your system language
+by default. The About window has a one-click "Copy System Info" for bug reports.
+
+![About window with the Forge logo, version and links](docs/images/forge-about.png)
 
 ## Quick start
 

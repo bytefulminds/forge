@@ -29,6 +29,9 @@ class CommandSpec:
     icon: str | None = None
     # Tooltip for the toolbar button; defaults to the title without "&" and "...".
     tooltip: Text | None = None
+    # Also in the editor's right-click menu, under the extension's title:
+    # "selection" only when text is selected, "always" in every case.
+    context: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,8 @@ class ExtensionInfo:
     # "tools": a submenu under Tools; "tools-flat": directly in Tools;
     # "search": appended to the Search menu (Notepad++ puts Find in Files there).
     placement: str = "tools"
+    # A separator above this extension's entry in its menu.
+    separator_before: bool = False
     # Optional "module:function" called once after the window is shown.
     on_startup: str | None = None
     defaults: dict[str, object] = field(default_factory=dict)

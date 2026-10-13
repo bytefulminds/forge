@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PyQt6.QtWidgets import QToolButton, QWidget
+from PyQt6.QtGui import QContextMenuEvent, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PyQt6.QtWidgets import QMenu, QToolButton, QWidget
 
 from forge.core.document import Document
 from forge.core.settings import EditorSettings
@@ -98,6 +99,12 @@ class DocumentTab(ForgeEditor):
         if page is not None and hasattr(page, "refresh"):
             page.refresh()
 
+    def set_csv_header(self, header: bool | None) -> None:
+        super().set_csv_header(header)
+        page = getattr(self, "page", None)
+        if page is not None and hasattr(page, "refresh"):
+            page.refresh()
+
     def set_language(self, language: Language) -> None:
         super().set_language(language)
         if hasattr(self, "_check_timer"):
@@ -136,6 +143,45 @@ class DocumentTab(ForgeEditor):
             event.acceptProposedAction()
             return
         super().dragMoveEvent(event)
+
+    # Right-click menu ------------------------------------------------------------
+
+    # Set by the main window: adds the tools for the selection to the menu.
+    context_menu_hook: Callable[[QMenu, bool], None] | None = None
+
+    def build_context_menu(self) -> QMenu:
+        """Forge's own (translated) edit menu plus the tools for the selection."""
+        menu = QMenu(self)
+        has_selection = bool(self.hasSelectedText())
+        writable = not self.isReadOnly()
+        entries: list[tuple[str, Callable[[], object], bool] | None] = [
+            (tr("&Undo"), self.undo, writable and bool(self.isUndoAvailable())),
+            (tr("&Redo"), self.redo, writable and bool(self.isRedoAvailable())),
+            None,
+            (tr("Cu&t"), self.cut, writable and has_selection),
+            (tr("&Copy"), self.copy, has_selection),
+            (tr("&Paste"), self.paste, writable and bool(self.SendScintilla(self.SCI_CANPASTE))),
+            (tr("&Delete"), self.removeSelectedText, writable and has_selection),
+            None,
+            (tr("Select &All"), self.selectAll, True),
+        ]
+        for entry in entries:
+            if entry is None:
+                menu.addSeparator()
+                continue
+            text, slot, enabled = entry
+            action = menu.addAction(text)
+            assert action is not None
+            action.triggered.connect(lambda _c=False, run=slot: run())
+            action.setEnabled(enabled)
+        if self.context_menu_hook is not None and writable:
+            self.context_menu_hook(menu, has_selection)
+        return menu
+
+    def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
+        if event is None:
+            return
+        self.build_context_menu().exec(event.globalPos())
 
     def dropEvent(self, event: QDropEvent | None) -> None:
         if event is None:

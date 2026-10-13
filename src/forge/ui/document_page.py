@@ -7,6 +7,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
+from forge.core.jsonpos import find_offset, line_and_column
 from forge.themes.theme import Theme
 from forge.ui.document_tab import DocumentTab
 from forge.ui.document_toolbar import (
@@ -18,6 +19,7 @@ from forge.ui.document_toolbar import (
     ToolItem,
 )
 from forge.ui.previews import MAX_PREVIEW_CHARS, PREVIEW_LANGUAGES, Preview, create_preview
+from forge.widgets.json_tree import JsonTree
 
 __all__ = ["PREVIEW", "SPLIT", "TEXT", "VIEW_MODES", "DocumentPage"]
 
@@ -109,6 +111,25 @@ class DocumentPage(QWidget):
         self._preview_language = self.editor.language.id
         if self.preview is not None:
             self.splitter.addWidget(self.preview)
+            tree = getattr(self.preview, "tree", None)
+            if isinstance(tree, JsonTree):
+                tree.path_clicked.connect(self.reveal_json_path)
+
+    def reveal_json_path(self, path: tuple[str | int, ...]) -> None:
+        """Select the key (or array item) at ``path`` in the editor."""
+        text = str(self.editor.text())
+        offset = find_offset(text, path)
+        if offset is None:
+            return
+        line, column = line_and_column(text, offset)
+        length = _token_length(text, offset)
+        editor = self.editor
+        start = int(editor.SendScintilla(editor.SCI_POSITIONFROMLINE, line))
+        anchor = int(editor.SendScintilla(editor.SCI_POSITIONRELATIVE, start, column))
+        caret = int(editor.SendScintilla(editor.SCI_POSITIONRELATIVE, anchor, length))
+        editor.SendScintilla(editor.SCI_ENSUREVISIBLEENFORCEPOLICY, line)
+        editor.SendScintilla(editor.SCI_SETSEL, anchor, caret)
+        editor.SendScintilla(editor.SCI_VERTICALCENTRECARET)
 
     def apply_theme(self, theme: Theme) -> None:
         self._theme = theme
@@ -132,6 +153,7 @@ class DocumentPage(QWidget):
             return
         if self.editor.language.id == "csv":
             self.preview.delimiter = self.editor.csv_delimiter
+            self.preview.csv_header = self.editor.csv_header
         self.preview.show_document(str(self.editor.text()), self.editor.doc.path)
 
     def _sync_scroll(self, value: int) -> None:
@@ -140,3 +162,24 @@ class DocumentPage(QWidget):
         bar = self.editor.verticalScrollBar()
         maximum = bar.maximum() if bar is not None else 0
         self.preview.scroll_to_ratio(value / maximum if maximum else 0.0)
+
+
+def _token_length(text: str, offset: int) -> int:
+    """Length of the string literal (with quotes) at ``offset``, else of the
+    value up to the next delimiter."""
+    if offset < len(text) and text[offset] == '"':
+        i = offset + 1
+        while i < len(text):
+            if text[i] == "\\":
+                i += 2
+                continue
+            if text[i] == '"':
+                return i + 1 - offset
+            i += 1
+        return len(text) - offset
+    if offset < len(text) and text[offset] in "[{":
+        return 1
+    end = offset
+    while end < len(text) and text[end] not in ",]}\r\n":
+        end += 1
+    return max(1, len(text[offset:end].rstrip()))

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from dataclasses import dataclass
+
+from forge.core.timestamps import iso_to_epoch
 
 CANDIDATE_DELIMITERS = (",", ";", "\t", "|")
 
@@ -164,3 +167,28 @@ def find_problem(text: str, delimiter: str) -> CsvProblem | None:
         breaks = raw.count("\n") + raw.count("\r") - raw.count("\r\n")
         line += breaks + (1 if record.end else 0)
     return None
+
+
+_NUMBER = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+
+
+def has_header(records: list[Record], delimiter: str) -> bool:
+    """Whether the first record looks like column names: no numbers or dates in
+    it, and its names do not come back as values in their own column."""
+    rows = [r.values() for r in records[:200] if not r.is_blank]
+    if len(rows) < 2:
+        return True
+    first, body = [v.strip() for v in rows[0]], rows[1:]
+    if any(_NUMBER.match(value) or iso_to_epoch(value) for value in first if value):
+        return False
+    for column in range(len(first)):
+        values = [row[column].strip() for row in body if column < len(row)]
+        numbers = sum(1 for v in values if _NUMBER.match(v))
+        if values and numbers / len(values) > 0.5:
+            return True  # a text name above a numeric column
+    return not any(
+        row[column].strip() == name
+        for row in body
+        for column, name in enumerate(first)
+        if column < len(row)
+    )

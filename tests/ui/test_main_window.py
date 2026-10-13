@@ -779,3 +779,74 @@ def test_restored_untitled_tab_shows_its_language(qtbot: QtBot) -> None:
     assert not second.status.delimiter.isHidden()
     assert restored.csv_delimiter_choice == "|"
     assert "csv.sort_asc" in second.page_of(restored).toolbar.tool_buttons
+
+
+def test_csv_header_row_can_be_switched(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.tools.csv_tool import actions as csv_actions
+    from forge.ui.previews import CsvPreview
+
+    file = tmp_path / "people.csv"
+    file.write_text("name,age\nann,7\nbob,9\n", newline="")
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None and tab.csv_header  # detected
+    window.set_view_mode(tab, "split")
+    preview = window.page_of(tab).preview
+    assert isinstance(preview, CsvPreview)
+    model = preview.model
+    horizontal = Qt.Orientation.Horizontal
+    assert model.rowCount() == 2 and model.headerData(0, horizontal) == "name"
+    assert model.headerData(0, Qt.Orientation.Vertical) == "1"  # data rows count from 1
+
+    monkeypatch.setattr(csv_actions, "_choose", lambda *_a, **_k: False)
+    window.page_of(tab).toolbar.tool_buttons["csv.header"].click()
+    assert tab.csv_header_choice is False and not tab.csv_header
+    assert model.rowCount() == 3 and model.headerData(0, horizontal) == "1"
+    tab.setCursorPosition(1, 5)
+    window.status.update_position(tab)
+    assert window.status.column.text() == "Column 2"  # no name without a header
+
+    window.extension_host.run_command("csv.to_json")
+    exported = window.current_tab()
+    assert exported is not None and exported.text().startswith('[\n    [\n        "name"')
+
+    window.close()
+    second = make_window(qtbot)
+    restored = next(t for t in second.all_tabs() if t.doc.path == file)
+    assert restored.csv_header_choice is False
+
+
+def test_json_tree_click_selects_the_item_in_the_code(qtbot: QtBot, tmp_path: Path) -> None:
+    from forge.ui.previews import JsonPreview
+
+    file = tmp_path / "a.json"
+    file.write_text(
+        '{\n  "naïve": "é",\n  "list": [10, {"kind": "x"}]\n}\n', encoding="utf-8", newline=""
+    )
+    window = make_window(qtbot)
+    tab = window.open_path(file)
+    assert tab is not None
+    window.set_view_mode(tab, "split")
+    preview = window.page_of(tab).preview
+    assert isinstance(preview, JsonPreview)
+    tree = preview.tree
+    root = tree.topLevelItem(0)
+    assert root is not None
+    for _ in range(4):  # children are created lazily, one level per expansion
+        tree.expandAll()
+    items = {tree.path_of(item): item for item in _all_items(root)}
+    tree.itemClicked.emit(items[("list", 1, "kind")], 0)
+    assert tab.selectedText() == '"kind"'
+    assert tab.getCursorPosition()[0] == 2
+    tree.itemClicked.emit(items[("list", 0)], 0)
+    assert tab.selectedText() == "10"
+    tree.itemClicked.emit(items[("naïve",)], 0)
+    assert tab.selectedText() == '"naïve"'
+
+
+def _all_items(item):  # type: ignore[no-untyped-def]
+    yield item
+    for index in range(item.childCount()):
+        yield from _all_items(item.child(index))

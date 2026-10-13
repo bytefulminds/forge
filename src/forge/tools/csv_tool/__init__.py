@@ -21,6 +21,14 @@ EXTENSION = ExtensionInfo(
             tooltip=lambda: tr("Delimiter used to read this file"),
         ),
         CommandSpec(
+            "csv.header",
+            lambda: tr("&Header Row..."),
+            f"{_ACTIONS}:choose_header",
+            languages=_CSV,
+            icon="panel-top",
+            tooltip=lambda: tr("Whether the first row holds the column names"),
+        ),
+        CommandSpec(
             "csv.convert_delimiter",
             lambda: tr("C&onvert Delimiter..."),
             f"{_ACTIONS}:convert_delimiter",

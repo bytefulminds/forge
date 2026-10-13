@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 38 176 180" width="176" height="180">
+  <!-- The Forge mark without the app icon tile, for dark brand surfaces
+       (About window). Same shapes as forge.svg; replace both with the
+       official vector export when it is available. -->
+  <defs>
+    <linearGradient id="outer" x1="47" y1="212" x2="209" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1F74FF"/>
+      <stop offset="0.45" stop-color="#4DA3FF"/>
+      <stop offset="1" stop-color="#20D7E8"/>
+    </linearGradient>
+    <linearGradient id="arm" x1="93" y1="0" x2="194" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4DA3FF"/>
+      <stop offset="1" stop-color="#20D7E8"/>
+    </linearGradient>
+    <linearGradient id="leg" x1="0" y1="143" x2="0" y2="211" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B7FF4A"/>
+      <stop offset="1" stop-color="#8EE03A"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer ribbon: top arm folding into the stem -->
+  <polygon points="47,94 99,44 209,44 171,86 108,86 81,113 81,212 47,179" fill="url(#outer)"/>
+  <!-- Fold shading on the stem face -->
+  <polygon points="47,94 81,113 81,212 47,179" fill="#000000" fill-opacity="0.14"/>
+  <!-- Inner ribbon: middle arm (sky to cyan) and lime leg -->
+  <polygon points="93,122 112,103 194,103 156,143 93,143" fill="url(#arm)"/>
+  <polygon points="93,143 127,143 127,179 93,211" fill="url(#leg)"/>
+</svg>

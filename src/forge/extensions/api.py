@@ -21,6 +21,7 @@ from forge.themes.theme import Theme
 
 if TYPE_CHECKING:
     from forge.ui.document_tab import DocumentTab
+    from forge.ui.framed_dialog import FramedDialog
 
 __all__ = ["EditorHandle", "ForgeAPI", "tr"]
 
@@ -96,9 +97,29 @@ class EditorHandle:
     def set_csv_delimiter(self, delimiter: str | None) -> None:
         self._tab.set_csv_delimiter(delimiter)
 
+    @property
+    def csv_header(self) -> bool:
+        """Whether the first CSV row holds column names (chosen or detected)."""
+        return bool(self._tab.csv_header)
+
+    @property
+    def csv_header_choice(self) -> bool | None:
+        return self._tab.csv_header_choice
+
+    def set_csv_header(self, header: bool | None) -> None:
+        self._tab.set_csv_header(header)
+
     def text_before_caret(self) -> str:
         position = int(self._tab.SendScintilla(_Q.SCI_GETCURRENTPOS))
         return bytes(self._tab.bytes(0, position).data())[:position].decode("utf-8", "replace")
+
+    @property
+    def line_count(self) -> int:
+        return int(self._tab.lines())
+
+    def insert(self, text: str) -> None:
+        """Insert ``text`` at the caret (replacing a selection), caret after it."""
+        self.replace_selection_and_select(text, len(text), 0)
 
     def has_selection(self) -> bool:
         return bool(self._tab.hasSelectedText())
@@ -273,6 +294,35 @@ class ForgeAPI:
         return directory
 
     # Panels and tabs ---------------------------------------------------------
+
+    def show_values(self, title: str, rows: list[tuple[str, str]], note: str = "") -> None:
+        """Show labelled values (each with a copy button) in a Forge window."""
+        from forge.ui.result_dialog import ResultDialog
+
+        ResultDialog(title, rows, note, self.window).exec()
+
+    def framed_dialog(self, title: str, resizable: bool = False) -> FramedDialog:
+        """An empty Forge-framed dialog; put the content in its ``body``."""
+        from forge.ui.framed_dialog import FramedDialog
+
+        return FramedDialog(title, self.window, resizable)
+
+    def copy_button(self, parent: QWidget, text: Callable[[], str]) -> QWidget:
+        """Forge's small copy icon button; copies ``text()`` when clicked."""
+        from forge.ui.result_dialog import copy_button
+
+        return copy_button(parent, text)
+
+    def copy_to_clipboard(self, text: str) -> None:
+        from forge.ui.result_dialog import copy_to_clipboard
+
+        copy_to_clipboard(text)
+
+    def choose_files(self, title: str) -> list[Path]:
+        """Files picked by the user (empty when cancelled), in Forge's dialog style."""
+        from forge.ui.file_dialogs import get_open_files
+
+        return [Path(f) for f in get_open_files(self.window, title, str(self.dialog_dir()))]
 
     def confirm(self, title: str, text: str) -> bool:
         """Ask a Yes / No question in Forge's dialog style; Yes returns True."""

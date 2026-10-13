@@ -37,6 +37,7 @@ class Preview(QStackedWidget):
 
     # CSV: set by the document page from the editor (chosen or detected).
     delimiter: str | None = None
+    csv_header: bool = True
 
     def __init__(self, view: QWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -108,10 +109,12 @@ class CsvModel(QAbstractTableModel):
         self._header: list[str] = []
         self._rows: list[list[str]] = []
 
-    def set_rows(self, rows: list[list[str]]) -> None:
+    def set_rows(self, rows: list[list[str]], header: bool = True) -> None:
+        """With ``header`` the first row names the columns; without, the
+        columns are numbered and every row is data. Rows count from 1."""
         self.beginResetModel()
-        self._header = rows[0] if rows else []
-        self._rows = rows[1:] if rows else []
+        self._header = rows[0] if rows and header else []
+        self._rows = rows[1:] if rows and header else rows
         self.endResetModel()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008
@@ -136,7 +139,7 @@ class CsvModel(QAbstractTableModel):
             return None
         if orientation == Qt.Orientation.Horizontal:
             return self._header[section] if section < len(self._header) else str(section + 1)
-        return str(section + 2)  # file line number of the row (line 1 is the header)
+        return str(section + 1)
 
 
 class CsvPreview(Preview):
@@ -153,7 +156,7 @@ class CsvPreview(Preview):
     def show_document(self, text: str, path: Path | None) -> None:
         default = "\t" if path is not None and path.suffix.lower() in (".tsv", ".tab") else ","
         delimiter = self.delimiter or detect_delimiter(text[:20_000], default)
-        self.model.set_rows(read_rows(text, delimiter))
+        self.model.set_rows(read_rows(text, delimiter), self.csv_header)
         self.table.resizeColumnsToContents()
         self.show_view()
 

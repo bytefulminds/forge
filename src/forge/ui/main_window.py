@@ -40,7 +40,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from forge import APP_NAME, __version__
+from forge import APP_NAME
 from forge.core.document import Document
 from forge.core.encoding import TextEncoding, can_encode, reinterpret
 from forge.core.eol import Eol
@@ -84,6 +84,13 @@ from forge.ui.title_bar import EdgeResizer, WindowHeader
 log = logging.getLogger(__name__)
 
 IS_MAC = sys.platform == "darwin"
+
+
+def _header_state(choice: bool | None) -> str:
+    """Session value for the CSV header choice: "header", "none" or "" (detect)."""
+    if choice is None:
+        return ""
+    return "header" if choice else "none"
 
 
 def reveal_command(path: Path, platform: str = sys.platform) -> list[str] | str | None:
@@ -317,6 +324,7 @@ class MainWindow(QMainWindow):
         tab.files_dropped.connect(self.open_paths)
         tab.SCN_CHARADDED.connect(lambda ch, t=tab: self._on_char_added(t, ch))
         tab.diagnostic_changed.connect(lambda t=tab: self._on_diagnostic_changed(t))
+        tab.context_menu_hook = self.extension_host.extend_context_menu
         tab.textChanged.connect(self._mark_session_changed)
         page = DocumentPage(tab, self.theme, self._toolbar_items)
         page.toolbar.mode_chosen.connect(lambda mode, t=tab: self.set_view_mode(t, mode))
@@ -912,6 +920,7 @@ class MainWindow(QMainWindow):
                     first_visible_line=tab.firstVisibleLine(),
                     view_mode=self.page_of(tab).mode if tab.page is not None else "text",
                     csv_delimiter=tab.csv_delimiter_choice or "",
+                    csv_header=_header_state(tab.csv_header_choice),
                 )
             )
         return state, backups
@@ -954,6 +963,8 @@ class MainWindow(QMainWindow):
         def place_cursor(tab: DocumentTab) -> None:
             if state.csv_delimiter:
                 tab.set_csv_delimiter(state.csv_delimiter)
+            if state.csv_header in ("header", "none"):
+                tab.set_csv_header(state.csv_header == "header")
             tab.setCursorPosition(state.cursor_line, state.cursor_index)
             tab.setFirstVisibleLine(state.first_visible_line)
             if state.view_mode != "text":
@@ -1726,14 +1737,6 @@ class MainWindow(QMainWindow):
             encoding_menu.set_current(tab.doc.encoding)
 
     def show_about(self) -> None:
-        message_box.about(
-            self,
-            tr("About Forge"),
-            tr(
-                "<h3>Forge {version}</h3>"
-                "<p>Your tools. Your workflow.</p>"
-                "<p>A fast, lightweight text editor for macOS and Linux.</p>"
-                "<p>Licensed under the GNU GPL v3.</p>",
-                version=__version__,
-            ),
-        )
+        from forge.ui.about_dialog import AboutDialog
+
+        AboutDialog(self.theme, self).exec()

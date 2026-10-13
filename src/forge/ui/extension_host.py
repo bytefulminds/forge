@@ -37,6 +37,7 @@ def builtin_extensions() -> list[ExtensionInfo]:
     from forge.tools import (
         compare,
         csv_tool,
+        devtools,
         find_in_files,
         json_tool,
         markdown_tool,
@@ -51,6 +52,7 @@ def builtin_extensions() -> list[ExtensionInfo]:
         markdown_tool.EXTENSION,
         csv_tool.EXTENSION,
         compare.EXTENSION,
+        *devtools.EXTENSIONS,
         find_in_files.EXTENSION,
     ]
 
@@ -92,6 +94,8 @@ class ExtensionHost:
 
     def build_menus(self, tools_menu: QMenu, search_menu: QMenu) -> None:
         for ext in self.extensions:
+            if ext.separator_before and ext.placement != "search":
+                tools_menu.addSeparator()
             if ext.placement == "search":
                 search_menu.addSeparator()
                 target = search_menu
@@ -127,6 +131,31 @@ class ExtensionHost:
         assert spec.checked_setting is not None
         self.api(ext.id).set_setting(spec.checked_setting, checked)
         self.run(ext, spec)
+
+    # Editor context menu ---------------------------------------------------------
+
+    def extend_context_menu(self, menu: QMenu, has_selection: bool) -> None:
+        """Add the tools that work on the editor (selection) as submenus."""
+        first = True
+        for ext in self.extensions:
+            specs = [
+                spec
+                for spec in ext.commands
+                if spec.context == "always" or (spec.context == "selection" and has_selection)
+            ]
+            if not specs:
+                continue
+            if first:
+                menu.addSeparator()
+                first = False
+            submenu = menu.addMenu(ext.title())
+            assert submenu is not None
+            for spec in specs:
+                if spec.separator_before and not submenu.isEmpty():
+                    submenu.addSeparator()
+                action = submenu.addAction(spec.title())
+                assert action is not None
+                action.triggered.connect(lambda _c=False, e=ext, s=spec: self.run(e, s))
 
     # Document toolbar ----------------------------------------------------------
 

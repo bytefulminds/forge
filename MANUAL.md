@@ -21,10 +21,12 @@ otherwise; the menus always show the right keys for your system.
 12. [YAML](#12-yaml)
 13. [Compare](#13-compare)
 14. [Find in Files](#14-find-in-files)
-15. [Preferences](#15-preferences)
-16. [Large files](#16-large-files)
-17. [Keyboard shortcuts](#17-keyboard-shortcuts)
-18. [Where Forge keeps its files](#18-where-forge-keeps-its-files)
+15. [Developer tools](#15-developer-tools)
+16. [Preferences](#16-preferences)
+17. [Large files](#17-large-files)
+18. [Keyboard shortcuts](#18-keyboard-shortcuts)
+19. [Where Forge keeps its files](#19-where-forge-keeps-its-files)
+20. [About Forge](#20-about-forge)
 
 ---
 
@@ -124,6 +126,10 @@ macOS and Linux and CR LF on Windows, as Notepad++ does.
 ## 4. Editing
 
 - Undo, redo, cut, copy, paste and select all work as everywhere.
+- **Right-click** in the editor for the edit commands and the developer tools: with text
+  selected you get Hash, Encode / Decode, Text, Generate, Date and Time and Cron; without
+  a selection, the tools that do not need one, such as inserting a UUID or the date and
+  time (section 15).
 - **Comments:** toggle with `Ctrl+Q` or `Ctrl+/` (on macOS `Ctrl+Q`, the Control key),
   comment with `Ctrl+K`, uncomment with `Ctrl+Shift+K`. Works on every selected line, in
   every language that has comments.
@@ -234,7 +240,9 @@ your browser. Images from the internet are not loaded; images next to the file a
 | Validate | Checks the document and jumps to the first error | |
 | Tree | Opens the split view with a tree of keys, values and types | |
 
-All JSON tools are one undo step. The preview of a JSON document is the tree.
+All JSON tools are one undo step. The preview of a JSON document is the tree. Click a key
+or an array item in the tree (or select it and press `Enter`) and Forge selects it in the
+code, so you can find a value in a large document by browsing the tree.
 
 ## 10. CSV
 
@@ -244,10 +252,15 @@ All JSON tools are one undo step. The preview of a JSON document is the tree.
 - **Delimiter:** Forge detects comma, semicolon, tab or pipe. If it guesses wrong, click the
   delimiter in the status bar or the first toolbar button and pick one; *Detect
   Automatically* goes back to detection. The choice is per document.
-- **Status bar:** shows the column at the cursor with its name from the first row, for
-  example *Column 4: created_at*.
-- **Table view:** the preview shows the data as a table with the first row as headers and
-  the file's line numbers on the left.
+- **Header row:** Forge detects whether the first row holds column names. Not every CSV
+  file has one, so you can choose with the *Header Row* toolbar button (or Tools > CSV):
+  *Detect Automatically*, *First Row Is the Header* or *No Header Row*. The choice is per
+  document and is remembered after a restart.
+- **Status bar:** shows the column at the cursor, with its name when the file has a header
+  row, for example *Column 4: created_at*.
+- **Table view:** the preview shows the data as a table. With a header row its names are
+  the column titles and the data rows are numbered from 1; without one, the columns are
+  numbered and the first line is row 1.
 - **Checks:** a row with a different number of columns than the first row, or a quote that
   is never closed, is underlined.
 
@@ -256,6 +269,7 @@ All JSON tools are one undo step. The preview of a JSON document is the tree.
 | Tool | Does |
 |---|---|
 | Delimiter | Chooses how the file is read (see above) |
+| Header Row | Whether the first row holds the column names (see above) |
 | Convert Delimiter | Rewrites the file with another delimiter and adds quotes where cells need them |
 | Align Columns | Pads cells with spaces so the columns line up |
 | Shrink Columns | Removes the spaces around cells (undoes Align) |
@@ -263,7 +277,7 @@ All JSON tools are one undo step. The preview of a JSON document is the tree.
 | Remove Duplicate Rows | Removes rows that equal an earlier row |
 | Epoch to ISO 8601 | Turns Unix timestamps into dates such as `2025-10-12T08:00:00Z` |
 | ISO 8601 to Epoch | Turns dates back into Unix timestamps |
-| Convert to JSON | Opens the data as JSON in a new tab: objects named after the headers, numbers as numbers |
+| Convert to JSON | Opens the data as JSON in a new tab: with a header row, objects named after the headers; without, one array per row. Numbers become numbers |
 | Convert to Markdown Table | Opens the data as a Markdown table in a new tab |
 
 **Timestamps in detail**
@@ -280,9 +294,9 @@ All JSON tools are one undo step. The preview of a JSON document is the tree.
 **Good to know**
 
 - Tools leave cells they do not change exactly as they were, including quotes and spaces.
-- Forge decides whether the first row is a header: it is when it holds no numbers or dates
-  and its names do not appear again as values in their own column. Sorting, duplicates and
-  conversions keep a header row in place.
+- When Forge detects the header row, it counts the first row as a header if it holds no
+  numbers or dates and its names do not appear again as values in their own column.
+  Sorting, duplicates and conversions keep a header row in place.
 - Every tool is one undo step.
 
 ## 11. XML
@@ -331,7 +345,76 @@ changes are skipped (your tab wins); open files without changes reload automatic
 Forge skips binary files and folders such as `.git` and `node_modules`. Large searches run in
 the background and can be cancelled.
 
-## 15. Preferences
+## 15. Developer tools
+
+The Tools menu has a set of everyday developer tools, grouped in submenus. The ones that work
+on text are also in the editor's right-click menu.
+
+### Hash
+
+- **Hash Selection:** MD5, SHA-1, SHA-256 and SHA-512 of the selected text (or of the whole
+  document without a selection), each with a copy button. Text is hashed as UTF-8.
+- **Hash Files:** choose one or more files (up to 20) and get the same four hashes for each.
+
+### Encode / Decode
+
+Works on the selection and replaces it (one undo step), so `Ctrl+Z` brings back the original.
+
+| Tool | Example |
+|---|---|
+| Base64 Encode, Decode | `hello` and `aGVsbG8=`; decoding also accepts the URL-safe alphabet and missing padding |
+| URL Encode, Decode | `a b&c` and `a%20b%26c` |
+| HTML Escape, Unescape | `<b>` and `&lt;b&gt;` |
+| JSON String Escape, Unescape | a line break and `\n`, a quote and `\"` |
+| Decode JWT | Opens the header and payload of a JSON Web Token as JSON in a new tab, with `iat`, `nbf` and `exp` as dates. The signature is not checked |
+
+When the selection cannot be converted (for example invalid Base64), the text stays as it
+is and the status bar says why.
+
+### Text
+
+- **Letter case:** UPPERCASE, lowercase, Title Case, camelCase, PascalCase, snake_case and
+  kebab-case. The last four split words at spaces, underscores, hyphens and capitals, so
+  `parseHttpResponse` becomes `parse_http_response`.
+- **Lines:** Sort Lines Ascending or Descending (natural order without case: `file2` before
+  `file10`), Remove Duplicate Lines, Reverse Lines and Trim Trailing Whitespace. They work on
+  the selected lines, or on the whole document without a selection.
+
+### Generate
+
+- **Insert UUID:** a random UUID (version 4) at the cursor.
+- **Insert UUIDs:** choose how many (up to 10,000), version 4 (random) or version 7 (time
+  ordered, sorts by creation time, good for database keys), uppercase, with or without
+  hyphens, in braces as a Windows GUID, one per line or comma separated.
+
+### Date and Time
+
+- **Insert Date and Time:** the current local time in ISO 8601, for example
+  `2026-10-13T14:05:09+02:00`; **(UTC)** inserts `2026-10-13T12:05:09Z`.
+- **Insert Date** (`2026-10-13`) and **Insert Unix Timestamp** (seconds).
+- **Epoch to ISO 8601** and **ISO 8601 to Epoch:** convert every timestamp in the selection,
+  as the CSV tools do (section 10).
+- **Date and Time Converter:** type or paste a Unix timestamp (seconds, milliseconds,
+  microseconds or nanoseconds), an ISO 8601 date, an RFC 2822 date (as in e-mail and HTTP
+  headers) or `now`, and see it as Unix seconds and milliseconds, ISO 8601 in UTC and local
+  time, RFC 2822, and how long ago or how far away it is. Each value has a copy button. The
+  selection, when there is one, is filled in.
+
+### Cron
+
+**Explain Cron Expression** shows a cron expression in words and lists its next ten runs in
+local time, while you type. Select an expression first to have it filled in.
+
+- Five fields: minute, hour, day of the month, month, day of the week.
+- Values, ranges (`1-5`), steps (`*/15`, `10-50/10`), lists (`1,15`), names (`JAN`, `MON`),
+  Sunday as `0` or `7`, and the shortcuts `@yearly`, `@monthly`, `@weekly`, `@daily` and
+  `@hourly`.
+- As in standard cron, when both the day of the month and the day of the week are set, the
+  job runs when either one matches.
+
+Example: `30 7 * * MON-FRI` is *At 07:30, Monday to Friday*.
+
+## 16. Preferences
 
 Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes them.
 
@@ -346,7 +429,7 @@ Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes the
 
 The interface language changes after a restart.
 
-## 16. Large files
+## 17. Large files
 
 Forge stays responsive with big files:
 
@@ -355,7 +438,7 @@ Forge stays responsive with big files:
 - Bracket colors and live checks stop above about 2 MB.
 - Previews are not rendered for documents above 20 million characters.
 
-## 17. Keyboard shortcuts
+## 18. Keyboard shortcuts
 
 | Action | Linux and Windows | macOS |
 |---|---|---|
@@ -380,7 +463,7 @@ Forge stays responsive with big files:
 | Compare with tab | `Ctrl+Alt+C` | `Cmd+Option+C` |
 | Preferences | `Ctrl+,` | `Cmd+,` |
 
-## 18. Where Forge keeps its files
+## 19. Where Forge keeps its files
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
@@ -392,3 +475,10 @@ Set `FORGE_HOME=/some/folder` to keep everything in one folder instead.
 
 If something goes wrong, the log usually says why; please attach it when you report a
 problem.
+
+## 20. About Forge
+
+Help > About Forge shows the version, links to this manual, the source code and the issue
+tracker, and the software Forge is built with. **Copy System Info** puts the Forge, Python,
+Qt and operating system versions and Forge's folders on the clipboard; paste it into a bug
+report.

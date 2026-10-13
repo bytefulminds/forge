@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtGui import QActionGroup, QCursor
 from PyQt6.QtWidgets import QMenu
 
+from forge.core import timestamps
 from forge.core.csvtext import Record, column_at, join_records, split_records
 from forge.extensions.api import EditorHandle, ForgeAPI
 from forge.i18n.translator import tr
@@ -69,6 +70,50 @@ def _pick(api: ForgeAPI, current: str | None, include_auto: bool) -> str | None:
     return choices.get(chosen) if chosen is not None else None
 
 
+def _choose(api: ForgeAPI, choices: list[tuple[str, object]], current: object) -> object | None:
+    """Popup menu at the mouse with checkable ``(label, value)`` choices;
+    returns the chosen value, or ``None`` when cancelled."""
+    menu = QMenu(api.window)
+    group = QActionGroup(menu)
+    values: dict[object, object] = {}
+    for label, value in choices:
+        if label == "-":
+            menu.addSeparator()
+            continue
+        action = menu.addAction(label)
+        assert action is not None
+        action.setCheckable(True)
+        action.setChecked(value == current)
+        group.addAction(action)
+        values[action] = value
+    chosen = menu.exec(QCursor.pos())
+    return values.get(chosen) if chosen is not None else None
+
+
+_AUTO = "auto"
+
+
+def header_choices() -> list[tuple[str, object]]:
+    return [
+        (tr("Detect Automatically"), _AUTO),
+        ("-", None),
+        (tr("First Row Is the Header"), True),
+        (tr("No Header Row"), False),
+    ]
+
+
+def choose_header(api: ForgeAPI) -> None:
+    editor = _editor(api)
+    if editor is None:
+        return
+    current = _AUTO if editor.csv_header_choice is None else editor.csv_header_choice
+    chosen = _choose(api, header_choices(), current)
+    if chosen is None:
+        return
+    editor.set_csv_header(None if chosen == _AUTO else bool(chosen))
+    api.status(tr("First row is the header.") if editor.csv_header else tr("No header row."))
+
+
 def choose_delimiter(api: ForgeAPI) -> None:
     editor = _editor(api)
     if editor is None:
@@ -115,7 +160,7 @@ def _sort(api: ForgeAPI, descending: bool) -> None:
     if editor is None:
         return
     records = _records(editor)
-    header = ops.has_header(records, editor.csv_delimiter)
+    header = editor.csv_header
     column = _column(editor)
     _write(editor, ops.sort_rows(records, column, descending, header))
     api.status(tr("Sorted by column {number}.", number=column + 1))
@@ -134,7 +179,7 @@ def remove_duplicates(api: ForgeAPI) -> None:
     if editor is None:
         return
     records = _records(editor)
-    kept, removed = ops.remove_duplicates(records, ops.has_header(records, editor.csv_delimiter))
+    kept, removed = ops.remove_duplicates(records, editor.csv_header)
     if removed:
         _write(editor, kept)
     api.status(tr("{count} duplicate rows removed.", count=removed))
@@ -149,9 +194,9 @@ def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
     if editor.has_selection():
         selected = editor.selected_text()
         if to_iso:
-            text, count = ops.convert_in_text(selected, True, local)
+            text, count = timestamps.convert_in_text(selected, True, local)
         else:
-            text, count = ops.convert_in_text(selected, False, milliseconds=milliseconds)
+            text, count = timestamps.convert_in_text(selected, False, milliseconds=milliseconds)
         if count:
             editor.replace_selection_and_select(text, 0, len(text))
         api.status(tr("{count} timestamps converted.", count=count))
@@ -160,12 +205,12 @@ def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
         api.status(tr("Select the timestamps to convert."))
         return
     records = _records(editor)
-    header = ops.has_header(records, editor.csv_delimiter)
+    header = editor.csv_header
 
     def convert(value: str) -> str | None:
         if to_iso:
-            return ops.epoch_to_iso(value, local)
-        return ops.iso_to_epoch(value, milliseconds)
+            return timestamps.epoch_to_iso(value, local)
+        return timestamps.iso_to_epoch(value, milliseconds)
 
     converted, count = ops.convert_column(
         records, _column(editor), convert, header, editor.csv_delimiter
@@ -192,7 +237,7 @@ def to_json(api: ForgeAPI) -> None:
     if editor is None:
         return
     records = _records(editor)
-    header = ops.has_header(records, editor.csv_delimiter)
+    header = editor.csv_header
     api.new_document(ops.to_json(records, header, editor.indent_unit()), "json")
 
 
@@ -201,5 +246,5 @@ def to_markdown(api: ForgeAPI) -> None:
     if editor is None:
         return
     records = _records(editor)
-    header = ops.has_header(records, editor.csv_delimiter)
+    header = editor.csv_header
     api.new_document(ops.to_markdown(records, header), "markdown")

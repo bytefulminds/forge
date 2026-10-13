@@ -133,7 +133,7 @@ class ForgeStatusBar(QStatusBar):
         number = len(split_line(before, delimiter))
         header = split_line(str(tab.text(0)).rstrip("\r\n"), delimiter)
         name = unquote(header[number - 1]).strip() if number <= len(header) else ""
-        if name and line > 0:
+        if name and line > 0 and tab.csv_header:
             text = tr("Column {number}: {name}", number=number, name=name)
         else:
             text = tr("Column {number}", number=number)
