@@ -32,7 +32,39 @@ otherwise; the menus always show the right keys for your system.
 
 ## 1. Installing and starting
 
-Forge runs from source with [uv](https://docs.astral.sh/uv/getting-started/installation/),
+### Downloads
+
+Every release on the [releases page](https://gitlab.com/bytefulminds/forge/-/releases) has a
+download per system. They include everything, also the full Markdown preview with Mermaid
+diagrams.
+
+| System | Download | Install |
+|---|---|---|
+| macOS 11 or later, Apple Silicon | `Forge-<version>-macos-arm64.dmg` | Open the disk image and drag Forge to Applications. |
+| Linux, x86-64 | `Forge-<version>-linux-x86_64.AppImage` | Make the file executable (`chmod +x`, or *Properties > Permissions* in your file manager) and run it. |
+| Windows 10 or 11, x86-64 | `Forge-<version>-setup.exe` | Run the setup. It installs for your account only, unless you choose all users. |
+
+Forge is not signed by Apple or Microsoft yet, so both warn the first time:
+
+- **macOS** blocks the first start. Open *System Settings > Privacy & Security* and click
+  *Open Anyway* next to the message about Forge. On macOS 14 and earlier you can also
+  right-click Forge in Applications and choose *Open*. This is needed only once.
+- **Windows** SmartScreen may say it protected your PC. Click *More info* and then
+  *Run anyway*.
+
+The Windows setup adds Forge to the Start menu, offers *Edit with Forge* in the right-click
+menu of files (on Windows 11 under *Show more options*), and adds Forge to *Open with* for
+common text formats without making it the default app. Uninstall it from *Settings > Apps*.
+
+On Linux the AppImage runs from any folder. To get Forge in your application menu, use a
+tool such as [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) or
+AppImageLauncher. Where the system blocks the browser sandbox (Ubuntu 24.04 and later, or
+when running as root), the AppImage switches the sandbox of the Markdown preview off; the
+preview only shows local files.
+
+### From source
+
+Forge also runs from source with [uv](https://docs.astral.sh/uv/getting-started/installation/),
 version `0.11.32` or newer. uv installs Python `3.12.13` and every dependency at the exact
 version Forge was tested with.
 The same commands work in Terminal (macOS), a Linux shell and PowerShell (Windows).
@@ -202,9 +234,9 @@ task lists, strikethrough, footnotes, code blocks and links within the document.
 Forge has two previews:
 
 - **Basic** (always available): fast and light, based on Qt's text engine.
-- **Full** (with the optional browser engine): looks like a web page and draws
-  [Mermaid](https://mermaid.js.org) diagrams. Install it with `uv sync --extra web` (about
-  200 MB). Forge uses it automatically when it is there. To use the basic preview anyway,
+- **Full** (with the browser engine): looks like a web page and draws
+  [Mermaid](https://mermaid.js.org) diagrams. The downloads include it. From source, install
+  it with `uv sync --extra web` (about 200 MB). Forge uses it automatically when it is there. To use the basic preview anyway,
   start Forge with `FORGE_BASIC_MARKDOWN=1`.
 
 Mermaid diagrams go in a code block:

@@ -11,7 +11,7 @@ from PyQt6.QtCore import QCoreApplication, QEvent, Qt
 from PyQt6.QtGui import QFileOpenEvent, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
 
-from forge import APP_ID, APP_NAME, __version__
+from forge import APP_ID, APP_NAME, __version__, smoke
 from forge.core.log import setup_logging
 from forge.core.settings import Settings
 from forge.i18n.translator import install_language, resolve_language
@@ -67,6 +67,7 @@ def _app_icon() -> QIcon:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
+    smoke_home = smoke.prepare_environment() if smoke.requested(argv) else None
     setup_logging()
     log.info("Starting %s %s", APP_NAME, __version__)
     _set_windows_app_id()
@@ -95,4 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     window.open_paths(Path(arg) for arg in argv[1:] if not arg.startswith("-"))
     window.open_paths(app.take_pending())
     window.show()
+    if smoke_home is not None:
+        code = smoke.run(window, smoke_home, argv)
+        window.close()
+        return code
     return app.exec()

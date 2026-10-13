@@ -1,7 +1,7 @@
 [project]
 name = "forge-editor"
 version = "0.1.0"
-description = "Forge: a fast, lightweight text editor for macOS and Linux in the spirit of Notepad++."
+description = "Forge: a fast, lightweight text editor for macOS, Linux and Windows in the spirit of Notepad++."
 readme = "README.md"
 license = "GPL-3.0-only"
 requires-python = "==3.12.13"

@@ -39,6 +39,7 @@ dist/
 *.AppImage
 *.dmg
 AppDir/
+packaging/windows/Output/
 
 # Logs and local runtime data
 *.log

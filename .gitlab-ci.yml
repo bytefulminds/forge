@@ -4,7 +4,13 @@
 # runners (no tags, as in Archy). test:macos and test:windows run the same
 # tests on our own group runners (tags: macos / windows, shell executor);
 # they are started by hand and may fail without blocking the pipeline.
-# Build and release stages for the three platforms follow in phase (f).
+#
+# build:* package Forge for macOS (dmg), Linux (AppImage) and Windows (Inno
+# Setup installer), each smoke testing what it built. On a version tag
+# (vX.Y.Z) they run by themselves, upload to the generic package registry,
+# and the release job publishes a GitLab release with the CHANGELOG notes
+# and download links. On other pipelines they can be started by hand to try
+# a build; the files are then kept as job artifacts only. See RELEASING.md.
 #
 # uv installs exactly what uv.lock pins. The image only provides a Python
 # 3.12 to bootstrap uv; uv itself installs the Python from .python-version
@@ -31,12 +37,15 @@ default:
 stages:
   - lint
   - test
+  - build
+  - release
 
 variables:
   UV_VERSION: "0.11.32"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
   UV_FROZEN: "1"
   UV_LINK_MODE: "copy"
+  PACKAGE_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/forge"
   QT_QPA_PLATFORM: "offscreen"
   QT_RUNTIME_LIBS: >-
     libgl1 libegl1 libgbm1 libdrm2 libfontconfig1 libfreetype6 libxkbcommon0
@@ -75,14 +84,9 @@ test:
 # Shell executor: uv is installed at the pinned version into .uv-bin and kept,
 # with the venv and uv's cache, between runs (GIT_CLEAN_FLAGS).
 
-test:macos:
-  stage: test
-  timeout: 20 minutes
+.macos-runner: &macos-runner
   tags:
     - macos                      # our macOS runner (Apple Silicon)
-  rules:
-    - when: manual
-      allow_failure: true
   variables:
     GIT_CLEAN_FLAGS: -ffdx -e .venv/ -e .uv-cache/ -e .uv-bin/
   cache: []
@@ -96,21 +100,10 @@ test:macos:
           | env UV_INSTALL_DIR="$CI_PROJECT_DIR/.uv-bin" UV_NO_MODIFY_PATH=1 sh
       fi
     - uv sync --frozen
-  script:
-    - uv run pytest -q --junitxml=report.xml
-  artifacts:
-    when: always
-    reports:
-      junit: report.xml
 
-test:windows:
-  stage: test
-  timeout: 20 minutes
+.windows-runner: &windows-runner
   tags:
     - windows                    # our Windows runner (PowerShell)
-  rules:
-    - when: manual
-      allow_failure: true
   variables:
     GIT_CLEAN_FLAGS: -ffdx -e .venv/ -e .uv-cache/ -e .uv-bin/
   cache: []
@@ -125,6 +118,28 @@ test:windows:
       }
     - uv sync --frozen
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+test:macos:
+  <<: *macos-runner
+  stage: test
+  timeout: 20 minutes
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - uv run pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+test:windows:
+  <<: *windows-runner
+  stage: test
+  timeout: 20 minutes
+  rules:
+    - when: manual
+      allow_failure: true
   script:
     - uv run pytest -q --junitxml=report.xml
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -132,3 +147,126 @@ test:windows:
     when: always
     reports:
       junit: report.xml
+
+# --- build ---------------------------------------------------------------------
+# A version tag builds and uploads automatically; otherwise start by hand.
+
+.build-rules: &build-rules
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - when: manual
+      allow_failure: true
+
+build:linux-appimage:
+  <<: *build-rules
+  stage: build
+  timeout: 45 minutes
+  before_script:
+    # Qt's runtime libraries (to bundle and for the smoke test), xcb-cursor for
+    # the X11 plugin, binutils for PyInstaller.
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends $QT_RUNTIME_LIBS
+        libxcb-cursor0 binutils curl file desktop-file-utils > /dev/null
+    - pip install --quiet "uv==${UV_VERSION}"
+    - uv sync --frozen
+  script:
+    - VERSION="$(uv run --frozen python scripts/release_notes.py --version)"
+    - echo "VERSION=${VERSION}" > release.env
+    # On a tag: refuse a tag that does not match the version, before building.
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        mkdir -p build
+        uv run --frozen python scripts/release_notes.py "$CI_COMMIT_TAG" > build/release-notes.md
+      fi
+    - ./packaging/build_appimage.sh
+    - FILE="Forge-${VERSION}-linux-x86_64.AppImage"
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "dist/${FILE}" "${PACKAGE_URL}/${VERSION}/${FILE}"
+      fi
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - dist/*.AppImage
+      - build/smoke-linux.txt
+      - build/release-notes.md
+    reports:
+      dotenv: release.env
+
+build:macos:
+  <<: [*macos-runner, *build-rules]
+  stage: build
+  timeout: 45 minutes
+  script:
+    - VERSION="$(uv run --frozen python scripts/release_notes.py --version)"
+    - bash packaging/macos/build_dmg.sh
+    - FILE="Forge-${VERSION}-macos-arm64.dmg"
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "dist/${FILE}" "${PACKAGE_URL}/${VERSION}/${FILE}"
+      fi
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - dist/*.dmg
+      - build/smoke-macos.txt
+
+build:windows:
+  <<: [*windows-runner, *build-rules]
+  stage: build
+  timeout: 45 minutes
+  script:
+    - $version = (uv run --frozen python scripts/release_notes.py --version 2>$null | Select-Object -Last 1).Trim()
+    - powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - $file = "Forge-$version-setup.exe"
+    - |
+      if ($env:CI_COMMIT_TAG) {
+        curl.exe --fail-with-body --header "JOB-TOKEN: $env:CI_JOB_TOKEN" `
+          --upload-file "packaging\windows\Output\$file" "$env:PACKAGE_URL/$version/$file"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      }
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - packaging/windows/Output/*.exe
+      - build/smoke-windows.txt
+
+# --- release ---------------------------------------------------------------------
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  needs:
+    - job: build:linux-appimage
+      artifacts: true          # VERSION (release.env) and the release notes
+    - job: build:macos
+      artifacts: false
+    - job: build:windows
+      artifacts: false
+  cache: []
+  before_script: []
+  script:
+    - echo "Publishing Forge ${VERSION} (${CI_COMMIT_TAG})"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "Forge ${VERSION}"
+    description: build/release-notes.md
+    assets:
+      links:
+        - name: "Forge-${VERSION}-macos-arm64.dmg (macOS, Apple Silicon)"
+          url: "${PACKAGE_URL}/${VERSION}/Forge-${VERSION}-macos-arm64.dmg"
+          link_type: package
+        - name: "Forge-${VERSION}-linux-x86_64.AppImage (Linux)"
+          url: "${PACKAGE_URL}/${VERSION}/Forge-${VERSION}-linux-x86_64.AppImage"
+          link_type: package
+        - name: "Forge-${VERSION}-setup.exe (Windows)"
+          url: "${PACKAGE_URL}/${VERSION}/Forge-${VERSION}-setup.exe"
+          link_type: package

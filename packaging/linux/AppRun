@@ -1,0 +1,19 @@
+#!/bin/sh
+# Starts Forge from inside the AppImage.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# The rich Markdown preview runs Chromium (Qt WebEngine), whose sandbox needs
+# unprivileged user namespaces. Where the system blocks them (Ubuntu 24.04 and
+# later, some hardened kernels) or when running as root, the sandbox cannot
+# start and the preview would stay empty, so it is switched off there. The
+# preview only shows local Markdown and never loads remote content.
+if [ -z "${QTWEBENGINE_DISABLE_SANDBOX:-}" ]; then
+    if [ "$(id -u)" = "0" ] \
+        || [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = "1" ] \
+        || [ "$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null)" = "0" ] \
+        || [ "$(cat /proc/sys/user/max_user_namespaces 2>/dev/null)" = "0" ]; then
+        export QTWEBENGINE_DISABLE_SANDBOX=1
+    fi
+fi
+
+exec "$HERE/usr/lib/forge/forge" "$@"

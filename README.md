@@ -18,8 +18,8 @@
 
 ![Forge with a Markdown document and its live preview, including a Mermaid diagram](docs/images/forge-markdown.png)
 
-> **Status:** early development. Forge runs from source today; packaged downloads
-> (a macOS app, an AppImage and a Windows installer) come later.
+> **Status:** first release. Feedback and bug reports are welcome in the
+> [issue tracker](https://gitlab.com/bytefulminds/forge/-/issues).
 
 ## Why Forge
 
@@ -102,7 +102,23 @@ by default. The About window has a one-click "Copy System Info" for bug reports.
 
 ![About window with the Forge logo, version and links](docs/images/forge-about.png)
 
-## Quick start
+## Download
+
+Get the latest version from the [releases page](https://gitlab.com/bytefulminds/forge/-/releases).
+The downloads include everything, also the full Markdown preview with Mermaid diagrams.
+
+| System | Download |
+|---|---|
+| macOS 11 or later, Apple Silicon | `Forge-<version>-macos-arm64.dmg`: drag Forge to Applications |
+| Linux, x86-64 | `Forge-<version>-linux-x86_64.AppImage`: make it executable and run it |
+| Windows 10 or 11, x86-64 | `Forge-<version>-setup.exe`: run the setup |
+
+Forge is not signed by Apple or Microsoft yet. On macOS, allow the first start in
+*System Settings > Privacy & Security* with *Open Anyway*; on Windows, choose *More info*
+and *Run anyway* if SmartScreen warns. The [manual](MANUAL.md#1-installing-and-starting)
+has the details.
+
+## Run from source
 
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/) (version `0.11.32` or
 newer). uv installs the right Python version by itself.
@@ -145,6 +161,9 @@ uv run pytest               # tests (headless, no display needed)
 FORGE_TEST_WEBENGINE=1 uv run pytest tests/ui/test_web_preview.py   # rich preview (web extra)
 ```
 
+Packaged builds (PyInstaller) are made by the scripts in `packaging/`, locally or in CI.
+[RELEASING.md](RELEASING.md) describes how to build them and publish a release.
+
 Every dependency is pinned to an exact version in `pyproject.toml` and `uv.lock`, so every
 machine gets the same build.
 
@@ -161,6 +180,8 @@ src/forge/
   tools/       JSON, YAML, XML, Markdown, CSV, Compare, Find in Files
   resources/   fonts, Lucide icons, Mermaid, translations
 docs/images/   screenshots for this README
+packaging/     PyInstaller spec, icons, macOS, Linux and Windows build scripts
+scripts/       release notes from CHANGELOG.md
 tests/
 ```
 
