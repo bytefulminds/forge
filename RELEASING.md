@@ -29,9 +29,15 @@ package registry and publishes a GitLab release with the notes from `CHANGELOG.m
    themselves (the macOS and Windows runners must be online). The
    `release` job publishes the release once all three succeeded.
 
-If a build fails after the tag is pushed, fix it on `main`, delete the tag
-(`git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`), and tag again. Packages
-already uploaded for that version can be deleted under *Deploy > Package registry*.
+Release tags (`v*`) are protected. If a build fails after the tag is pushed, fix it on
+`main` and tag again:
+
+1. Delete the release under *Deploy > Releases* if one was created, and the uploaded
+   files for that version under *Deploy > Package registry*.
+2. Delete the tag on GitLab in the web interface (*Code > Tags*, the delete button):
+   GitLab refuses to delete a protected tag with `git push`.
+3. Locally: `git tag -d vX.Y.Z`, `git tag -a vX.Y.Z -m "Forge X.Y.Z"` and
+   `git push origin vX.Y.Z`.
 
 ## What the pipeline does
 
