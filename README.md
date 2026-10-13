@@ -1,21 +1,20 @@
-<p align="center">
-  <img src="src/forge/resources/icons/forge.svg" width="96" alt="Forge logo">
-</p>
+<div align="center">
+<img src="src/forge/resources/icons/forge.svg" width="96" alt="Forge logo">
 
-<h1 align="center">Forge</h1>
 
-<p align="center">
-  <strong>A fast, lightweight text editor for macOS and Linux, in the spirit of Notepad++.</strong><br>
+# Forge
+
+**Fast, lightweight text editor for macOS and Linux, in the spirit of Notepad++.</strong><br>
   Open a file, get to work. Tools for JSON, CSV, Markdown, XML and YAML are built in,
-  not bolted on.
-</p>
+  not bolted on.**
 
-<p align="center">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-081A33">
-  <img alt="Python" src="https://img.shields.io/badge/python-3.12-3C7DD9">
-  <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-5CC8E8">
-  <img alt="Languages" src="https://img.shields.io/badge/UI-English%20%7C%20Nederlands-A6D84A">
-</p>
+**Version 0.1.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for Windows, macOS and Linux
+
+[![pipeline](https://gitlab.com/bytefulminds/Forge/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/Forge/-/pipelines)
+![license: GLP](https://img.shields.io/badge/license-GPL--3.0-5CC8E)
+![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-CD7E45)
+
+</div>
 
 ![Forge with a Markdown document and its live preview, including a Mermaid diagram](docs/images/forge-markdown.png)
 
