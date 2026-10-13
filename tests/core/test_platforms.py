@@ -30,7 +30,7 @@ def test_save_retries_while_windows_locks_the_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "a.txt"
-    target.write_text("old")
+    target.write_text("old", newline="")
     real_replace = fileio.os.replace
     calls = {"n": 0}
 

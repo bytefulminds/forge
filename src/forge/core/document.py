@@ -16,7 +16,8 @@ _ids = itertools.count(1)
 class Document:
     path: Path | None = None
     encoding: TextEncoding = DEFAULT_ENCODING
-    eol: Eol = DEFAULT_EOL
+    # Read at creation time, so tests can pin it (see tests/conftest.py).
+    eol: Eol = field(default_factory=lambda: DEFAULT_EOL)
     untitled_index: int = 0
     id: int = field(default_factory=lambda: next(_ids))
 

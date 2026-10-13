@@ -21,7 +21,7 @@ def test_round_trip_and_stale_backups_are_removed(forge_home: Path) -> None:
         active=1,
     )
     save_session(state, {"tab-2.txt": "unsaved ✓"})
-    (session_dir() / "backup" / "old.txt").write_text("stale")
+    (session_dir() / "backup" / "old.txt").write_text("stale", newline="")
     save_session(state, {"tab-2.txt": "unsaved ✓"})
 
     loaded = load_session()
@@ -32,5 +32,5 @@ def test_round_trip_and_stale_backups_are_removed(forge_home: Path) -> None:
 
 def test_missing_or_corrupt_session_is_empty(forge_home: Path) -> None:
     assert load_session() == SessionState()
-    (session_dir() / "session.json").write_text("{not json")
+    (session_dir() / "session.json").write_text("{not json", newline="")
     assert load_session() == SessionState()

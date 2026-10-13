@@ -68,7 +68,7 @@ def test_failing_tool_does_not_crash(qtbot: QtBot) -> None:
 
 def test_compare_with_saved_opens_a_tool_tab(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("one\ntwo\n")
+    file.write_text("one\ntwo\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -90,8 +90,8 @@ def test_compare_with_saved_opens_a_tool_tab(qtbot: QtBot, tmp_path: Path) -> No
 
 
 def test_find_in_files_panel(qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (tmp_path / "x.txt").write_text("hello world\nbye\n")
-    (tmp_path / "y.md").write_text("say hello\n")
+    (tmp_path / "x.txt").write_text("hello world\nbye\n", newline="")
+    (tmp_path / "y.md").write_text("say hello\n", newline="")
     window = make_window(qtbot)
     window.extension_host.run_command("find_in_files.open")
     dock = window._panels["find-in-files"]
@@ -131,7 +131,7 @@ def test_compare_sides_scroll_together_line_by_line(qtbot: QtBot, tmp_path: Path
     del new[60:63]
     new.insert(120, "added")
     file = tmp_path / "a.txt"
-    file.write_text("\n".join(old) + "\n")
+    file.write_text("\n".join(old) + "\n", newline="")
     window = make_window(qtbot)
     window.settings.editor.word_wrap = True
     window.resize(900, 500)

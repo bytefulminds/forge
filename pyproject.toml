@@ -105,3 +105,6 @@ warn_return_any = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyqt6"
+# A test that runs longer than this prints the stack of every thread, so a hang
+# in CI shows where it is (pytest's built-in faulthandler, no plugin needed).
+faulthandler_timeout = 120

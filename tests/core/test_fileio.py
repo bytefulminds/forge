@@ -28,7 +28,7 @@ def test_save_preserves_encoding_and_bom(tmp_path: Path) -> None:
 
 def test_save_is_atomic_and_keeps_permissions(tmp_path: Path) -> None:
     path = tmp_path / "script.sh"
-    path.write_text("old\n")
+    path.write_text("old\n", newline="")
     os.chmod(path, 0o750)
     save_text(path, "new\n", TextEncoding())
     assert path.read_text() == "new\n"

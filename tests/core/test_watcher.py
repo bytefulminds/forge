@@ -9,7 +9,7 @@ from forge.core.watcher import FileWatcher
 
 
 def _touch_later(path: Path, text: str) -> None:
-    path.write_text(text)
+    path.write_text(text, newline="")
     stat = path.stat()
     # Make sure the timestamp moves even on coarse file systems.
     os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
@@ -17,7 +17,7 @@ def _touch_later(path: Path, text: str) -> None:
 
 def test_reports_external_change(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("one")
+    file.write_text("one", newline="")
     watcher = FileWatcher()
     watcher.watch(file)
     with qtbot.waitSignal(watcher.changed, timeout=3000) as blocker:
@@ -27,7 +27,7 @@ def test_reports_external_change(qtbot: QtBot, tmp_path: Path) -> None:
 
 def test_ignores_own_writes(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("one")
+    file.write_text("one", newline="")
     watcher = FileWatcher()
     watcher.watch(file)
     _touch_later(file, "mine")
@@ -38,7 +38,7 @@ def test_ignores_own_writes(qtbot: QtBot, tmp_path: Path) -> None:
 
 def test_reports_deletion(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("one")
+    file.write_text("one", newline="")
     watcher = FileWatcher()
     watcher.watch(file)
     with qtbot.waitSignal(watcher.deleted, timeout=3000):

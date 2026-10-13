@@ -25,18 +25,20 @@ def test_round_trip(forge_home: Path) -> None:
 
 def test_corrupt_or_wrong_types_fall_back(forge_home: Path) -> None:
     file = paths.settings_file()
-    file.write_text('[editor]\ntab_width = "wide"\nunknown = 1\n[appearance]\ntheme = "light"\n')
+    file.write_text(
+        '[editor]\ntab_width = "wide"\nunknown = 1\n[appearance]\ntheme = "light"\n', newline=""
+    )
     loaded = Settings.load()
     assert loaded.editor.tab_width == 4
     assert loaded.appearance.theme == "light"
 
-    file.write_text("this is [not toml")
+    file.write_text("this is [not toml", newline="")
     assert Settings.load() == Settings()
 
 
 def test_v1_font_settings_are_migrated(forge_home: Path) -> None:
     paths.settings_file().write_text(
-        '[editor]\nfont_family = "Menlo"\nfont_size = 13\ntab_width = 2\n'
+        '[editor]\nfont_family = "Menlo"\nfont_size = 13\ntab_width = 2\n', newline=""
     )
     loaded = Settings.load()
     assert loaded.editor.font_family == "JetBrains Mono"

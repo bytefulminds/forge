@@ -15,9 +15,9 @@ from forge.tools.find_in_files.engine import (
 def _tree(root: Path) -> None:
     (root / "src").mkdir()
     (root / "node_modules").mkdir()
-    (root / "src" / "a.py").write_text("token = 1\nTOKEN = 2\n")
-    (root / "src" / "b.json").write_text('{"token": true}\n')
-    (root / "node_modules" / "c.py").write_text("token\n")
+    (root / "src" / "a.py").write_text("token = 1\nTOKEN = 2\n", newline="")
+    (root / "src" / "b.json").write_text('{"token": true}\n', newline="")
+    (root / "node_modules" / "c.py").write_text("token\n", newline="")
     (root / "image.bin").write_bytes(b"token\0\0\0")
     (root / "latin.txt").write_bytes("café token\r\n".encode("cp1252"))
 
@@ -54,7 +54,7 @@ def test_replace_keeps_encoding_and_line_endings(tmp_path: Path) -> None:
 
 def test_regex_replacement_groups(tmp_path: Path) -> None:
     file = tmp_path / "x.txt"
-    file.write_text("a=1\nb=2\n")
+    file.write_text("a=1\nb=2\n", newline="")
     pattern = Query(r"(\w)=(\d)", tmp_path, regex=True).compile()
     assert replace_in_file(file, pattern, r"\2=\1", regex=True) == 2
     assert file.read_text() == "1=a\n2=b\n"

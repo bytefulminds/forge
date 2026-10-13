@@ -42,7 +42,7 @@ def test_new_documents_get_increasing_names(qtbot: QtBot) -> None:
 
 def test_open_replaces_pristine_untitled_tab(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "data.json"
-    file.write_text('{"a": 1}\n')
+    file.write_text('{"a": 1}\n', newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -54,7 +54,7 @@ def test_open_replaces_pristine_untitled_tab(qtbot: QtBot, tmp_path: Path) -> No
 
 def test_opening_same_file_twice_reuses_tab(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("x")
+    file.write_text("x", newline="")
     window = make_window(qtbot)
     window.new_document().setText("keep me")
     first = window.open_path(file)
@@ -65,7 +65,7 @@ def test_opening_same_file_twice_reuses_tab(qtbot: QtBot, tmp_path: Path) -> Non
 
 def test_edit_and_save(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "notes.txt"
-    file.write_text("one\r\n")
+    file.write_text("one\r\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -159,7 +159,7 @@ def test_save_as_asks_before_overwriting_after_adding_extension(
     qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     existing = tmp_path / "data.json"
-    existing.write_text("keep")
+    existing.write_text("keep", newline="")
     window = make_window(qtbot)
     tab = window.current_tab()
     assert tab is not None
@@ -208,7 +208,7 @@ def test_menu_accelerators_are_unique(qtbot: QtBot, language: str) -> None:
 
 def test_ctrl_q_toggles_comment_in_editor(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.py"
-    file.write_text("x = 1\ny = 2\n")
+    file.write_text("x = 1\ny = 2\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -260,9 +260,9 @@ def test_plus_button_opens_new_tab_next_to_last_tab(qtbot: QtBot) -> None:
 
 def test_session_restores_tabs_unsaved_text_and_active_tab(qtbot: QtBot, tmp_path: Path) -> None:
     clean = tmp_path / "clean.txt"
-    clean.write_text("on disk\n")
+    clean.write_text("on disk\n", newline="")
     edited = tmp_path / "edited.json"
-    edited.write_text("{}\n")
+    edited.write_text("{}\n", newline="")
 
     first = make_window(qtbot)
     first.open_path(clean)
@@ -290,14 +290,14 @@ def test_session_restores_tabs_unsaved_text_and_active_tab(qtbot: QtBot, tmp_pat
 def _bump(path: Path, text: str) -> None:
     import os
 
-    path.write_text(text)
+    path.write_text(text, newline="")
     st = path.stat()
     os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
 
 
 def test_clean_tab_reloads_when_file_changes(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("old\n")
+    file.write_text("old\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -309,7 +309,7 @@ def test_clean_tab_reloads_when_file_changes(qtbot: QtBot, tmp_path: Path) -> No
 
 def test_dirty_tab_gets_a_notice_instead_of_reload(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("old\n")
+    file.write_text("old\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -326,7 +326,7 @@ def test_dirty_tab_gets_a_notice_instead_of_reload(qtbot: QtBot, tmp_path: Path)
 
 def test_deleted_file_keeps_text_and_marks_dirty(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("keep me\n")
+    file.write_text("keep me\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -341,7 +341,7 @@ def test_deleted_file_keeps_text_and_marks_dirty(qtbot: QtBot, tmp_path: Path) -
 
 def test_own_save_is_not_an_external_change(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("one\n")
+    file.write_text("one\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -390,7 +390,7 @@ def test_large_file_loads_in_background_without_highlighting(
     monkeypatch.setattr(mw, "LARGE_FILE_BYTES", 1000)
     file = tmp_path / "big.json"
     body = '{"k": 1}\n' * 2000
-    file.write_text(body)
+    file.write_text(body, newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -407,7 +407,7 @@ def test_large_file_loads_in_background_without_highlighting(
 
 def test_find_bar_incremental_search_and_replace_all(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("alpha beta\nbeta gamma\nBETA\n")
+    file.write_text("alpha beta\nbeta gamma\nBETA\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
@@ -520,7 +520,7 @@ def test_follow_system_theme(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_session_off_starts_empty(qtbot: QtBot, tmp_path: Path) -> None:
     file = tmp_path / "a.txt"
-    file.write_text("x")
+    file.write_text("x", newline="")
     settings = Settings()
     settings.general.remember_session = False
     first = MainWindow(settings)
@@ -548,9 +548,9 @@ def test_view_modes_for_markdown_csv_and_json(qtbot: QtBot, tmp_path: Path) -> N
     from forge.ui.previews import CsvPreview, JsonPreview, MarkdownPreview
 
     md = tmp_path / "a.md"
-    md.write_text("# Title\n\nSome *text*.\n")
+    md.write_text("# Title\n\nSome *text*.\n", newline="")
     csv_file = tmp_path / "b.csv"
-    csv_file.write_text("x,y\n1,2\n3,4\n")
+    csv_file.write_text("x,y\n1,2\n3,4\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(md)
     assert tab is not None
@@ -586,7 +586,7 @@ def test_view_modes_for_markdown_csv_and_json(qtbot: QtBot, tmp_path: Path) -> N
 
 def test_view_mode_is_restored_with_the_session(qtbot: QtBot, tmp_path: Path) -> None:
     md = tmp_path / "a.md"
-    md.write_text("# Title\n")
+    md.write_text("# Title\n", newline="")
     first = make_window(qtbot)
     tab = first.open_path(md)
     assert tab is not None
@@ -672,7 +672,7 @@ def test_csv_tools_in_window(qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.M
     from forge.ui.previews import CsvPreview
 
     file = tmp_path / "data.csv"
-    file.write_text("name;created\nzoe;1700000000\nann;1600000000\n")
+    file.write_text("name;created\nzoe;1700000000\nann;1600000000\n", newline="")
     window = make_window(qtbot)
     tab = window.open_path(file)
     assert tab is not None
