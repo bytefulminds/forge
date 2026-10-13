@@ -13,9 +13,9 @@ package registry and publishes a GitLab release with the notes from `CHANGELOG.m
    It becomes the release notes. Check them with
    `uv run python scripts/release_notes.py vX.Y.Z`.
 3. **README.** Update the version line at the top of `README.md`.
-4. **Test.** Run `uv run pytest` and, on our own runners, the manual `test:macos` and
-   `test:windows` jobs. To try the packages before tagging, start the manual `build:*`
-   jobs on the branch: their files are kept as job artifacts for a week.
+4. **Test.** The pipeline on `main` must pass. Also start the manual `test:macos` and
+   `test:windows` jobs on our own runners. To try the packages before tagging, run the
+   build scripts locally (see below); the `build:*` jobs only run on a tag.
 5. **Commit and tag.**
 
    ```sh
@@ -24,8 +24,9 @@ package registry and publishes a GitLab release with the notes from `CHANGELOG.m
    git push origin main vX.Y.Z
    ```
 
-6. **Watch the pipeline.** On the tag, `build:linux-appimage`, `build:macos` and
-   `build:windows` run by themselves (the macOS and Windows runners must be online). The
+6. **Watch the pipeline.** A tag pipeline only builds and releases (the tests already
+   ran on `main`): `build:linux-appimage`, `build:macos` and `build:windows` run by
+   themselves (the macOS and Windows runners must be online). The
    `release` job publishes the release once all three succeeded.
 
 If a build fails after the tag is pushed, fix it on `main`, delete the tag

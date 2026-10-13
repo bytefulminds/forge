@@ -1,16 +1,16 @@
 # GitLab CI for Forge. Platforms in order of focus: macOS, Linux, Windows.
 #
-# lint, typecheck and test run on every pipeline, on GitLab's shared Linux
-# runners (no tags, as in Archy). test:macos and test:windows run the same
-# tests on our own group runners (tags: macos / windows, shell executor);
-# they are started by hand and may fail without blocking the pipeline.
+# Two kinds of pipeline:
 #
-# build:* package Forge for macOS (dmg), Linux (AppImage) and Windows (Inno
-# Setup installer), each smoke testing what it built. On a version tag
-# (vX.Y.Z) they run by themselves, upload to the generic package registry,
-# and the release job publishes a GitLab release with the CHANGELOG notes
-# and download links. On other pipelines they can be started by hand to try
-# a build; the files are then kept as job artifacts only. See RELEASING.md.
+# - Branches (main) and merge requests: lint, typecheck and test run by
+#   themselves on GitLab's shared Linux runners (no tags, as in Archy), so the
+#   pipeline always ends as passed or failed. test:macos and test:windows run
+#   the same tests on our own group runners (tags: macos / windows, shell
+#   executor); they are started by hand and never block the pipeline.
+# - Version tags (vX.Y.Z): only build:* (macOS dmg, Linux AppImage, Windows
+#   installer, each smoke testing what it built and uploading it to the
+#   generic package registry) and the release job, which publishes a GitLab
+#   release with the CHANGELOG notes and download links. See RELEASING.md.
 #
 # uv installs exactly what uv.lock pins. The image only provides a Python
 # 3.12 to bootstrap uv; uv itself installs the Python from .python-version
@@ -53,13 +53,33 @@ variables:
     libnss3 libnspr4 libx11-6 libx11-xcb1 libxcb1 libxext6 libxfixes3 libxrender1
     libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxkbfile1
 
+# Which pipeline a job belongs to.
+.on-branch: &on-branch
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: on_success
+
+.on-branch-manual: &on-branch-manual
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: manual
+      allow_failure: true
+
+.on-release-tag: &on-release-tag
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
 lint:
+  <<: *on-branch
   stage: lint
   script:
     - uv run ruff check .
     - uv run ruff format --check .
 
 typecheck:
+  <<: *on-branch
   stage: lint
   script:
     # With the optional web extra, so the rich Markdown preview is checked too.
@@ -67,6 +87,7 @@ typecheck:
     - uv run mypy
 
 test:
+  <<: *on-branch
   stage: test
   before_script:
     - apt-get update -qq
@@ -120,12 +141,9 @@ test:
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 test:macos:
-  <<: *macos-runner
+  <<: [*macos-runner, *on-branch-manual]
   stage: test
   timeout: 20 minutes
-  rules:
-    - when: manual
-      allow_failure: true
   script:
     - uv run pytest -q --junitxml=report.xml
   artifacts:
@@ -134,12 +152,9 @@ test:macos:
       junit: report.xml
 
 test:windows:
-  <<: *windows-runner
+  <<: [*windows-runner, *on-branch-manual]
   stage: test
   timeout: 20 minutes
-  rules:
-    - when: manual
-      allow_failure: true
   script:
     - uv run pytest -q --junitxml=report.xml
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -148,17 +163,10 @@ test:windows:
     reports:
       junit: report.xml
 
-# --- build ---------------------------------------------------------------------
-# A version tag builds and uploads automatically; otherwise start by hand.
-
-.build-rules: &build-rules
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-    - when: manual
-      allow_failure: true
+# --- build (version tags only) ---------------------------------------------------
 
 build:linux-appimage:
-  <<: *build-rules
+  <<: *on-release-tag
   stage: build
   timeout: 45 minutes
   before_script:
@@ -172,12 +180,9 @@ build:linux-appimage:
   script:
     - VERSION="$(uv run --frozen python scripts/release_notes.py --version)"
     - echo "VERSION=${VERSION}" > release.env
-    # On a tag: refuse a tag that does not match the version, before building.
-    - |
-      if [ -n "${CI_COMMIT_TAG:-}" ]; then
-        mkdir -p build
-        uv run --frozen python scripts/release_notes.py "$CI_COMMIT_TAG" > build/release-notes.md
-      fi
+    # Refuse a tag that does not match the version, before building.
+    - mkdir -p build
+    - uv run --frozen python scripts/release_notes.py "$CI_COMMIT_TAG" > build/release-notes.md
     - ./packaging/build_appimage.sh
     - FILE="Forge-${VERSION}-linux-x86_64.AppImage"
     - |
@@ -196,7 +201,7 @@ build:linux-appimage:
       dotenv: release.env
 
 build:macos:
-  <<: [*macos-runner, *build-rules]
+  <<: [*macos-runner, *on-release-tag]
   stage: build
   timeout: 45 minutes
   script:
@@ -216,7 +221,7 @@ build:macos:
       - build/smoke-macos.txt
 
 build:windows:
-  <<: [*windows-runner, *build-rules]
+  <<: [*windows-runner, *on-release-tag]
   stage: build
   timeout: 45 minutes
   script:
@@ -240,10 +245,9 @@ build:windows:
 # --- release ---------------------------------------------------------------------
 
 release:
+  <<: *on-release-tag
   stage: release
   image: registry.gitlab.com/gitlab-org/cli:latest
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
   needs:
     - job: build:linux-appimage
       artifacts: true          # VERSION (release.env) and the release notes
