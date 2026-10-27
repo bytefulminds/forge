@@ -185,11 +185,10 @@ def remove_duplicates(api: ForgeAPI) -> None:
     api.status(tr("{count} duplicate rows removed.", count=removed))
 
 
-def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
+def _convert_times(api: ForgeAPI, to_iso: bool, local: bool = False) -> None:
     editor = api.active_editor()
     if editor is None or editor.widget.isReadOnly():
         return
-    local = bool(api.setting("local_time", False))
     milliseconds = bool(api.setting("epoch_ms", False))
     if editor.has_selection():
         selected = editor.selected_text()
@@ -222,6 +221,10 @@ def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
 
 def epoch_to_iso(api: ForgeAPI) -> None:
     _convert_times(api, to_iso=True)
+
+
+def epoch_to_iso_local(api: ForgeAPI) -> None:
+    _convert_times(api, to_iso=True, local=True)
 
 
 def iso_to_epoch(api: ForgeAPI) -> None:

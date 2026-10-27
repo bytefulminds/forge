@@ -52,16 +52,23 @@ def parse_moment(text: str, now: datetime | None = None) -> datetime:
 
 
 def relative(moment: datetime, tr: Text, now: datetime | None = None) -> str:
+    """ "in 1 h 8 min", "3 d 2 h ago": two units at most, rounded down."""
     seconds = int((moment - (now or datetime.now(UTC))).total_seconds())
     size = abs(seconds)
-    if size >= 86_400:
-        span = tr("{count} days", count=size // 86_400)
-    elif size >= 3_600:
-        span = tr("{count} hours", count=size // 3_600)
-    elif size >= 60:
-        span = tr("{count} minutes", count=size // 60)
+    days, rest = divmod(size, 86_400)
+    hours, rest = divmod(rest, 3_600)
+    minutes = rest // 60
+    if days:
+        parts = [tr("{count} d", count=days)] + ([tr("{count} h", count=hours)] if hours else [])
+    elif hours:
+        parts = [tr("{count} h", count=hours)]
+        if minutes:
+            parts.append(tr("{count} min", count=minutes))
+    elif minutes:
+        parts = [tr("{count} min", count=minutes)]
     else:
         return tr("now")
+    span = " ".join(parts)
     return tr("in {span}", span=span) if seconds > 0 else tr("{span} ago", span=span)
 
 

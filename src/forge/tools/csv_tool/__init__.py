@@ -79,13 +79,25 @@ EXTENSION = ExtensionInfo(
         ),
         CommandSpec(
             "csv.epoch_to_iso",
-            lambda: tr("&Epoch to ISO 8601"),
+            lambda: tr("&Epoch to ISO 8601 (UTC)"),
             f"{_ACTIONS}:epoch_to_iso",
             separator_before=True,
             languages=_CSV,
             icon="calendar-clock",
             tooltip=lambda: tr(
-                "Unix timestamps to ISO 8601 dates (the selection, or the column at the cursor)"
+                "Unix timestamps to ISO 8601 dates in UTC "
+                "(the selection, or the column at the cursor)"
+            ),
+        ),
+        CommandSpec(
+            "csv.epoch_to_iso_local",
+            lambda: tr("Epoch to ISO 8601 (&Local Time)"),
+            f"{_ACTIONS}:epoch_to_iso_local",
+            languages=_CSV,
+            icon="clock",
+            tooltip=lambda: tr(
+                "Unix timestamps to ISO 8601 dates in your local time, with the UTC offset "
+                "(the selection, or the column at the cursor)"
             ),
         ),
         CommandSpec(
@@ -97,12 +109,6 @@ EXTENSION = ExtensionInfo(
             tooltip=lambda: tr(
                 "ISO 8601 dates to Unix timestamps (the selection, or the column at the cursor)"
             ),
-        ),
-        CommandSpec(
-            "csv.local_time",
-            lambda: tr("Use &Local Time"),
-            f"{_ACTIONS}:setting_changed",
-            checked_setting="local_time",
         ),
         CommandSpec(
             "csv.epoch_ms",
@@ -128,5 +134,5 @@ EXTENSION = ExtensionInfo(
             tooltip=lambda: tr("Open the data as a Markdown table in a new tab"),
         ),
     ),
-    defaults={"local_time": False, "epoch_ms": False},
+    defaults={"epoch_ms": False},
 )

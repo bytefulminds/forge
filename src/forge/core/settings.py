@@ -53,7 +53,7 @@ class GeneralSettings:
 
 @dataclass
 class AppearanceSettings:
-    # "dark", "light" or "system" (follow the operating system).
+    # "dark", "blue", "light" or "system" (follow the operating system).
     theme: str = "dark"
     # Empty means "follow the system locale".
     language: str = ""

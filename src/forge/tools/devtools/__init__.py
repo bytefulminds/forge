@@ -141,9 +141,15 @@ DATETIME = ExtensionInfo(
         _cmd("datetime.epoch", lambda: tr("Insert Unix &Timestamp"), "insert_epoch", "always"),
         _cmd(
             "datetime.to_iso",
-            lambda: tr("&Epoch to ISO 8601"),
+            lambda: tr("&Epoch to ISO 8601 (UTC)"),
             "epoch_to_iso",
             sep=True,
+            when=detect.has_epoch,
+        ),
+        _cmd(
+            "datetime.to_iso_local",
+            lambda: tr("Epoch to ISO 8601 (&Local Time)"),
+            "epoch_to_iso_local",
             when=detect.has_epoch,
         ),
         _cmd(
@@ -159,15 +165,7 @@ DATETIME = ExtensionInfo(
             sep=True,
             when=detect.is_moment,
         ),
-        CommandSpec(
-            "datetime.local_time",
-            lambda: tr("Use &Local Time"),
-            f"{_A}:setting_changed",
-            checked_setting="local_time",
-            separator_before=True,
-        ),
     ),
-    defaults={"local_time": False},
 )
 
 CRON = ExtensionInfo(
@@ -176,11 +174,12 @@ CRON = ExtensionInfo(
     commands=(
         _cmd(
             "cron.explain",
-            lambda: tr("&Explain Cron Expression..."),
+            lambda: tr("&Cron Expression..."),
             "explain_cron",
             when=detect.is_cron,
         ),
     ),
+    defaults={"clock24": True, "utc": False},
 )
 
 EXTENSIONS = (HASH, ENCODE, TEXT, GENERATE, DATETIME, CRON)

@@ -69,12 +69,15 @@ def is_cron(text: str) -> bool:
     candidate = text.strip()
     if not candidate or len(candidate) > 200 or "\n" in candidate:
         return False
-    if not candidate.startswith("@") and not all(_CRON_FIELD.match(f) for f in candidate.split()):
-        return False
-    from forge.tools.devtools.cron import CronError, parse
+    from forge.tools.devtools.cron import CronError, is_reboot, parse, split_line
 
+    schedule, _command = split_line(candidate)
+    if is_reboot(schedule):
+        return True
+    if not schedule.startswith("@") and not all(_CRON_FIELD.match(f) for f in schedule.split()):
+        return False
     try:
-        parse(candidate)
+        parse(schedule)
     except CronError:
         return False
     return True

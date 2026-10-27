@@ -117,9 +117,24 @@ def test_hash_and_dialogs(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None
     cron_dialog = CronDialog(api, "*/5 * * * *")
     qtbot.addWidget(cron_dialog.dialog)
     assert cron_dialog.summary.text() == "Every 5 minutes"
-    assert len(cron_dialog.runs.toPlainText().splitlines()) == CronDialog.RUNS
+    assert cron_dialog.runs.topLevelItemCount() == CronDialog.RUNS
+    assert cron_dialog.cards["minute"].meaning.text() == "every 5"
+    assert cron_dialog.cards["second"].isHidden()
     cron_dialog.input.setText("not cron")
-    assert cron_dialog.summary.text().startswith("Not valid")
+    assert cron_dialog.error.text().startswith("Not valid")
+    cron_dialog.input.setText("61 * * * *")
+    assert cron_dialog.cards["minute"].property("invalid") is True
+    assert cron_dialog.cards["hour"].property("invalid") is False
+    cron_dialog.input.setText("*/10 * * * * *")  # with seconds
+    assert not cron_dialog.cards["second"].isHidden()
+    assert cron_dialog.summary.text() == "Every 10 seconds"
+    yearly = cron_dialog.cheat.topLevelItem(4)
+    assert yearly is not None
+    cron_dialog.cheat.itemClicked.emit(yearly, 0)
+    assert cron_dialog.input.text() == "@yearly"
+    cron_dialog.input.setText("@reboot")
+    assert cron_dialog.summary.text() == "Once, when the system starts"
+    assert cron_dialog.runs.topLevelItemCount() == 0
 
     dates = DateTimeDialog(api, "1700000000")
     qtbot.addWidget(dates.dialog)
@@ -157,7 +172,8 @@ def test_language_options_sit_on_the_toolbar(qtbot: QtBot) -> None:
     assert [a.text() for a in options.actions()] == ["&Auto-close Tags"]
     window.set_document_language(language_by_id("csv"))
     options = window.page_of(tab).toolbar.tool_buttons["options"].menu()
-    assert {a.text() for a in options.actions()} == {"Use &Local Time", "Epoch in &Milliseconds"}
+    assert [a.text() for a in options.actions()] == ["Epoch in &Milliseconds"]
+    assert "csv.epoch_to_iso_local" in window.page_of(tab).toolbar.tool_buttons
     window.set_document_language(language_by_id("python"))
     assert "options" not in window.page_of(tab).toolbar.tool_buttons
 
@@ -183,6 +199,43 @@ def test_right_click_menu_fits_language_and_selection(qtbot: QtBot) -> None:
     assert "Base64 &Decode" in entries("aGVsbG8gd29ybGQ=", "python")["&Encode / Decode"]
     assert "&HTML Escape" in entries("<b>", "html")["&Encode / Decode"]
     assert "C&ron" in entries("*/5 * * * *", "yaml")
-    assert "&Epoch to ISO 8601" in entries("at 1700000000", "text")["&Date and Time"]
+    date_tools = entries("at 1700000000", "text")["&Date and Time"]
+    assert "&Epoch to ISO 8601 (UTC)" in date_tools
+    assert "Epoch to ISO 8601 (&Local Time)" in date_tools
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln"
     assert "Decode JW&T" in entries(jwt, "text")["&Encode / Decode"]
+
+
+def test_cron_window_edits_a_crontab_line(qtbot: QtBot) -> None:
+    from forge.tools.devtools.dialogs import CronDialog
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    tab.setText("0 9 * * 1-5 /opt/backup.sh")
+    tab.selectAll()
+    api = window.extension_host.api("forge.cron")
+    dialog = CronDialog(api, tab.selectedText(), replace=True)
+    qtbot.addWidget(dialog.dialog)
+    assert dialog.input.text() == "0 9 * * 1-5"
+    assert dialog.command == "/opt/backup.sh"
+    dialog.input.setText("30 6 * * *")
+    dialog.use_button.click()
+    assert tab.text() == "30 6 * * * /opt/backup.sh"
+
+
+def test_epoch_to_local_iso(qtbot: QtBot) -> None:
+    from datetime import datetime
+
+    window = make_window(qtbot)
+    tab = window.current_tab()
+    assert tab is not None
+    tab.setText("1700000000")
+    tab.selectAll()
+    window.extension_host.run_command("datetime.to_iso_local")
+    expected = datetime.fromtimestamp(1700000000).astimezone().isoformat(timespec="seconds")
+    assert tab.text() == expected
+    tab.setText("1700000000")
+    tab.selectAll()
+    window.extension_host.run_command("datetime.to_iso")
+    assert tab.text() == "2023-11-14T22:13:20Z"

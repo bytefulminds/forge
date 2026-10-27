@@ -65,58 +65,77 @@ class Theme:
 
 _DARK_PREPROCESSOR = t.mix(t.CYAN, t.LIME, 0.5)
 
-DARK = Theme(
-    id="dark",
-    is_dark=True,
-    editor_bg=t.NIGHT_BLUE,
-    chrome_bg=t.mix(t.NIGHT_BLUE, t.BLACK, 0.30),
-    elevated_bg=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.08),
-    hover_bg=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.12),
-    pressed_bg=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.20),
-    menu_selected_bg=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.22),
-    border=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.18),
-    border_strong=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.32),
-    text=t.LIGHT,
-    text_muted=t.mix(t.LIGHT, t.NIGHT_BLUE, 0.32),
-    text_disabled=t.mix(t.LIGHT, t.NIGHT_BLUE, 0.62),
-    accent=t.SKY_BLUE,
-    accent_hover=t.mix(t.SKY_BLUE, t.LIGHT, 0.20),
-    on_accent=t.NIGHT_BLUE,
-    focus=t.SKY_BLUE,
-    selection=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.30),
-    caret=t.LIME,
-    caret_line=t.mix(t.NIGHT_BLUE, t.SKY_BLUE, 0.06),
-    margin_bg=t.NIGHT_BLUE,
-    margin_text=t.mix(t.LIGHT, t.NIGHT_BLUE, 0.44),
-    indent_guide=t.mix(t.NIGHT_BLUE, t.LIGHT, 0.12),
-    brace_match_bg=t.mix(t.NIGHT_BLUE, t.CYAN, 0.28),
-    scroll_handle=t.mix(t.NIGHT_BLUE, t.LIGHT, 0.18),
-    scroll_handle_hover=t.mix(t.NIGHT_BLUE, t.LIGHT, 0.32),
-    error=t.ERROR,
-    warning=t.WARNING,
-    success=t.LIME,
-    syntax=SyntaxColors(
-        default=t.LIGHT,
-        comment=t.mix(t.LIGHT, t.NIGHT_BLUE, 0.40),
-        keyword=t.SKY_BLUE,
-        string=t.LIME,
-        number=t.CYAN,
-        operator=t.mix(t.LIGHT, t.NIGHT_BLUE, 0.18),
-        tag=t.SKY_BLUE,
-        attribute=t.mix(t.SKY_BLUE, t.LIGHT, 0.45),
-        preprocessor=_DARK_PREPROCESSOR,
+
+def _dark_theme(theme_id: str, base: str, tint: str, strength: float = 1.0) -> Theme:
+    """A dark theme on ``base``; surfaces, borders and the caret line lean to ``tint``.
+
+    Forge Blue tints its night blue with sky blue. Forge Dark tints a near-black
+    graphite with neutral light, a little less (``strength``) because light is
+    brighter than sky blue. Selections, accents and syntax colors are the same
+    brand colors in both.
+    """
+
+    def surface(amount: float) -> str:
+        return t.mix(base, tint, amount * strength)
+
+    return Theme(
+        id=theme_id,
+        is_dark=True,
+        editor_bg=base,
+        chrome_bg=t.mix(base, t.BLACK, 0.30),
+        elevated_bg=surface(0.08),
+        hover_bg=surface(0.12),
+        pressed_bg=surface(0.20),
+        menu_selected_bg=t.mix(base, t.SKY_BLUE, 0.22),
+        border=surface(0.18),
+        border_strong=surface(0.32),
+        text=t.LIGHT,
+        text_muted=t.mix(t.LIGHT, base, 0.32),
+        text_disabled=t.mix(t.LIGHT, base, 0.62),
+        accent=t.SKY_BLUE,
+        accent_hover=t.mix(t.SKY_BLUE, t.LIGHT, 0.20),
+        on_accent=base,
+        focus=t.SKY_BLUE,
+        selection=t.mix(base, t.SKY_BLUE, 0.30),
+        caret=t.LIME,
+        caret_line=surface(0.06),
+        margin_bg=base,
+        margin_text=t.mix(t.LIGHT, base, 0.44),
+        indent_guide=t.mix(base, t.LIGHT, 0.12),
+        brace_match_bg=t.mix(base, t.CYAN, 0.28),
+        scroll_handle=t.mix(base, t.LIGHT, 0.18),
+        scroll_handle_hover=t.mix(base, t.LIGHT, 0.32),
         error=t.ERROR,
-    ),
-    rainbow=(
-        t.WARNING,  # gold
-        t.mix(t.ERROR, t.SKY_BLUE, 0.45),  # orchid
-        t.SKY_BLUE,
-        t.LIME,
-        t.CYAN,
-        t.mix(t.WARNING, t.ERROR, 0.5),  # coral
-    ),
-    indent_rainbow=(t.WARNING, t.LIME, t.mix(t.ERROR, t.SKY_BLUE, 0.45), t.SKY_BLUE),
-)
+        warning=t.WARNING,
+        success=t.LIME,
+        syntax=SyntaxColors(
+            default=t.LIGHT,
+            comment=t.mix(t.LIGHT, base, 0.40),
+            keyword=t.SKY_BLUE,
+            string=t.LIME,
+            number=t.CYAN,
+            operator=t.mix(t.LIGHT, base, 0.18),
+            tag=t.SKY_BLUE,
+            attribute=t.mix(t.SKY_BLUE, t.LIGHT, 0.45),
+            preprocessor=_DARK_PREPROCESSOR,
+            error=t.ERROR,
+        ),
+        rainbow=(
+            t.WARNING,  # gold
+            t.mix(t.ERROR, t.SKY_BLUE, 0.45),  # orchid
+            t.SKY_BLUE,
+            t.LIME,
+            t.CYAN,
+            t.mix(t.WARNING, t.ERROR, 0.5),  # coral
+        ),
+        indent_rainbow=(t.WARNING, t.LIME, t.mix(t.ERROR, t.SKY_BLUE, 0.45), t.SKY_BLUE),
+    )
+
+
+# Near black with neutral grey surfaces: what people expect from "dark".
+DARK = _dark_theme("dark", t.GRAPHITE, t.LIGHT, strength=0.7)
+# The brand's night blue (Forge Dark in version 0.1.0).
+BLUE = _dark_theme("blue", t.NIGHT_BLUE, t.SKY_BLUE)
 
 LIGHT = Theme(
     id="light",
@@ -171,11 +190,12 @@ LIGHT = Theme(
     indent_rainbow=(t.WARNING, t.LIME, t.mix(t.ERROR, t.SKY_BLUE, 0.45), t.SKY_BLUE),
 )
 
-THEMES: dict[str, Theme] = {DARK.id: DARK, LIGHT.id: LIGHT}
+THEMES: dict[str, Theme] = {DARK.id: DARK, BLUE.id: BLUE, LIGHT.id: LIGHT}
 
-# Settings value meaning "use dark or light like the operating system".
+# Settings value meaning "use dark or light like the operating system"
+# (Forge Dark or Forge Light).
 SYSTEM_THEME_ID = "system"
-THEME_CHOICES: tuple[str, ...] = (DARK.id, LIGHT.id, SYSTEM_THEME_ID)
+THEME_CHOICES: tuple[str, ...] = (DARK.id, BLUE.id, LIGHT.id, SYSTEM_THEME_ID)
 
 
 def get_theme(theme_id: str, system_is_dark: bool = True) -> Theme:

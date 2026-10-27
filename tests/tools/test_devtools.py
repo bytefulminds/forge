@@ -109,6 +109,57 @@ def test_cron_next_runs_and_explanation() -> None:
     assert text == "At 00:00, on day 1 of the month, in January and July"
 
 
+@pytest.mark.parametrize(
+    ("expression", "text"),
+    [
+        ("*/15 9-17 * * MON-FRI", "Every 15 minutes, between 09:00 and 17:59, Monday to Friday"),
+        ("0 9-17 * * *", "Every hour from 09:00 to 17:00"),
+        ("30 */2 * * *", "At minute 30 past every 2 hours"),
+        ("0,30 9,17 * * *", "At 09:00, 09:30, 17:00 and 17:30"),
+        ("@hourly", "Every hour, on the hour"),
+        ("1,10 * * * *", "At minutes 1 and 10 past every hour"),
+        ("0-10 8 * * *", "Every minute from 08:00 to 08:10"),
+        ("0 12 */2 * *", "At 12:00, every 2 days"),
+        ("*/10 * * * * *", "Every 10 seconds"),
+        ("30 0 9 * * *", "At 09:00:30"),
+        ("*/5 * 9 * * *", "Every 5 seconds, between 09:00 and 09:59"),
+    ],
+)
+def test_cron_descriptions(expression: str, text: str) -> None:
+    assert cron.describe(cron.parse(expression), tr, DAYS, MONTHS) == text
+
+
+def test_cron_twelve_hour_clock_and_fields() -> None:
+    parsed = cron.parse("0 22 * * 1-5")
+    assert cron.describe(parsed, tr, DAYS, MONTHS, clock24=False) == "At 10:00 PM, Monday to Friday"
+    assert cron.field_meaning(cron.WEEKDAY, parsed.weekday, tr, DAYS, MONTHS) == (
+        "Monday to Friday"
+    )
+    assert cron.field_meaning(cron.DAY, parsed.day, tr, DAYS, MONTHS) == "every day"
+    every = cron.parse_field("*/15", cron.MINUTE)
+    assert cron.field_meaning(cron.MINUTE, every, tr, DAYS, MONTHS) == "every 15"
+
+
+def test_cron_seconds_and_crontab_lines() -> None:
+    runs = cron.parse("*/20 * * * * *").next_runs(datetime(2026, 1, 1, 0, 0, 30), 3)
+    assert [r.strftime("%H:%M:%S") for r in runs] == ["00:00:40", "00:01:00", "00:01:20"]
+    assert cron.split_line("0 9 * * 1-5 /opt/backup.sh --all") == (
+        "0 9 * * 1-5",
+        "/opt/backup.sh --all",
+    )
+    assert cron.split_line("0 0 9 * * MON") == ("0 0 9 * * MON", "")
+    assert cron.split_line("@daily run.sh") == ("@daily", "run.sh")
+    assert cron.is_reboot(" @REBOOT ")
+
+
+def test_relative_times() -> None:
+    now = datetime(2026, 10, 27, 12, 0, tzinfo=UTC)
+    later = datetime(2026, 10, 27, 13, 8, tzinfo=UTC)
+    assert datetimes.relative(later, tr, now) == "in 1 h 8 min"
+    assert datetimes.relative(datetime(2026, 10, 24, 10, 0, tzinfo=UTC), tr, now) == "3 d 2 h ago"
+    assert datetimes.relative(now, tr, now) == "now"
+
+
 @pytest.mark.parametrize("bad", ["* * * *", "60 * * * *", "5-1 * * * *", "*/0 * * * *", "@reboot"])
 def test_cron_errors(bad: str) -> None:
     with pytest.raises(cron.CronError):

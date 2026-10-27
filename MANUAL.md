@@ -97,7 +97,13 @@ From top to bottom:
     When the document has a syntax error, the error appears here; click it to jump there.
   - Right: language, line endings and encoding. Click any of them to change it.
 
-Forge has a dark and a light theme, or follows your system setting (Settings > Theme).
+Forge has three themes, under Settings > Theme:
+
+- **Forge Dark:** near black with grey surfaces, for people who want a classic dark editor.
+- **Forge Blue:** the deep night blue of the Forge brand.
+- **Forge Light:** light surfaces with dark text.
+
+*Follow System* switches between Forge Dark and Forge Light with your system setting.
 
 ## 3. Files
 
@@ -153,14 +159,14 @@ Supported: UTF-8, UTF-8 with BOM, UTF-16 LE and BE, Windows-1252 and ISO-8859-1.
 
 Line endings (Edit > EOL Conversion, or the status bar) can be Windows (CR LF), Unix (LF) or
 Macintosh (CR). Forge keeps the line endings a file already has. New documents use LF on
-macOS and Linux and CR LF on Windows, as Notepad++ does.
+macOS and Linux and CR LF on Windows.
 
 ## 4. Editing
 
 - Undo, redo, cut, copy, paste and select all work as everywhere.
 - **Right-click** in the editor for the edit commands and the developer tools (section 15).
   The menu only shows what fits: the conversions for the selected text (Base64 Decode only
-  when the selection is Base64, Explain Cron only for a cron expression, HTML escaping in
+  when the selection is Base64, Cron Expression only for a cron expression, HTML escaping in
   HTML, XML and Markdown files) and, without a selection, inserting a UUID or the date and
   time.
 - **Comments:** toggle with `Ctrl+Q` or `Ctrl+/` (on macOS `Ctrl+Q`, the Control key),
@@ -310,7 +316,8 @@ code, so you can find a value in a large document by browsing the tree.
 | Shrink Columns | Removes the spaces around cells (undoes Align) |
 | Sort Ascending, Sort Descending | Sorts rows by the column at the cursor: numbers as numbers (also with a decimal comma such as `3,5`), text without case; the header row stays on top |
 | Remove Duplicate Rows | Removes rows that equal an earlier row |
-| Epoch to ISO 8601 | Turns Unix timestamps into dates such as `2025-10-12T08:00:00Z` |
+| Epoch to ISO 8601 (UTC) | Turns Unix timestamps into dates in UTC, such as `2025-10-12T08:00:00Z` |
+| Epoch to ISO 8601 (Local Time) | The same in your own time zone, with the offset, such as `2025-10-12T10:00:00+02:00` |
 | ISO 8601 to Epoch | Turns dates back into Unix timestamps |
 | Convert to JSON | Opens the data as JSON in a new tab: with a header row, objects named after the headers; without, one array per row. Numbers become numbers |
 | Convert to Markdown Table | Opens the data as a Markdown table in a new tab |
@@ -321,8 +328,8 @@ code, so you can find a value in a large document by browsing the tree.
   With a selection it also works in other files, such as logs.
 - Seconds, milliseconds, microseconds and nanoseconds are recognized by their number of
   digits (10, 13, 16 or 19).
-- Dates are written in UTC with a `Z`. Turn on *Use Local Time* under the options button at
-  the end of the CSV toolbar for your own time zone.
+- Choose UTC (dates end in `Z`) or your local time (dates end in the offset from UTC, such
+  as `+02:00`) with the two buttons on the toolbar.
 - Dates without a time zone are read as UTC. Turn on *Epoch in Milliseconds* to get
   milliseconds instead of seconds.
 
@@ -428,9 +435,10 @@ is and the status bar says why.
 - **Insert Date and Time:** the current local time in ISO 8601, for example
   `2026-10-13T14:05:09+02:00`; **(UTC)** inserts `2026-10-13T12:05:09Z`.
 - **Insert Date** (`2026-10-13`) and **Insert Unix Timestamp** (seconds).
-- **Epoch to ISO 8601** and **ISO 8601 to Epoch:** convert every timestamp in the selection,
-  as the CSV tools do (section 10). Dates are in UTC unless *Use Local Time* (in this
-  submenu) is on.
+- **Epoch to ISO 8601 (UTC)**, **Epoch to ISO 8601 (Local Time)** and **ISO 8601 to
+  Epoch:** convert every timestamp in the selection, as the CSV tools do (section 10). Local
+  time includes the offset from UTC, for example `2023-11-15T00:13:20+02:00`. All three are
+  in the right-click menu when the selection holds a timestamp or a date.
 - **Date and Time Converter:** type or paste a Unix timestamp (seconds, milliseconds,
   microseconds or nanoseconds), an ISO 8601 date, an RFC 2822 date (as in e-mail and HTTP
   headers) or `now`, and see it as Unix seconds and milliseconds, ISO 8601 in UTC and local
@@ -439,13 +447,27 @@ is and the status bar says why.
 
 ### Cron
 
-**Explain Cron Expression** shows a cron expression in words and lists its next ten runs in
-local time, while you type. Select an expression first to have it filled in.
+**Cron Expression** opens one window to write or check a schedule. Everything updates while
+you type:
 
-- Five fields: minute, hour, day of the month, month, day of the week.
+- At the top, the expression and what it means in words, for example
+  *Every 15 minutes, between 09:00 and 17:59, Monday to Friday*.
+- Below it, one card per field with its value and meaning. A card with a mistake turns red
+  and says what is wrong.
+- **Next runs:** the next ten times, in local time or UTC, with how far away each one is.
+  *24-hour clock* switches between `17:00` and `5:00 PM`. Forge remembers both choices.
+- **Cheat sheet:** the symbols and shortcuts. Click a row to load its example.
+- **Copy** copies the expression. **Insert** puts it at the cursor; when you opened the window
+  on a selected expression, **Replace Selection** puts your edited version back.
+
+Select an expression, or a whole crontab line such as `0 2 * * * /opt/backup.sh`, before
+you open the window to have it filled in. The command stays as it is.
+
+- Five fields: minute, hour, day of the month, month, day of the week. Six fields put
+  seconds first, as Quartz and Spring do.
 - Values, ranges (`1-5`), steps (`*/15`, `10-50/10`), lists (`1,15`), names (`JAN`, `MON`),
-  Sunday as `0` or `7`, and the shortcuts `@yearly`, `@monthly`, `@weekly`, `@daily` and
-  `@hourly`.
+  Sunday as `0` or `7`, `?` as "any" (Quartz), and the shortcuts `@yearly` (`@annually`),
+  `@monthly`, `@weekly`, `@daily` (`@midnight`), `@hourly` and `@reboot`.
 - As in standard cron, when both the day of the month and the day of the week are set, the
   job runs when either one matches.
 
@@ -461,7 +483,7 @@ Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes the
 | | Word wrap, whitespace and line endings, line numbers, highlight the current line |
 | | Rainbow brackets, rainbow indentation, live syntax checks |
 | | Autocomplete and after how many characters |
-| Appearance | Theme (dark, light or follow the system) and interface language (English or Nederlands) |
+| Appearance | Theme (Forge Dark, Forge Blue, Forge Light or follow the system) and interface language (English or Nederlands) |
 | Session | Remember open tabs and unsaved text; use the system file dialogs |
 
 The interface language changes after a restart.

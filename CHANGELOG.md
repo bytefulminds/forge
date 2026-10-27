@@ -4,6 +4,27 @@ All notable changes to Forge. The newest version is at the top. Versions follow
 [semantic versioning](https://semver.org). The release notes on GitLab are taken from
 this file by `scripts/release_notes.py`, so every release needs a section here.
 
+## [Unreleased]
+
+### Added
+
+- Forge Dark is now a near black theme with grey surfaces. The night blue theme it
+  replaces is still there as Forge Blue.
+- A new cron window: the expression in words, a card per field, the next runs in local
+  time or UTC, a 12 or 24-hour clock, and a cheat sheet whose examples load with one
+  click. It takes whole crontab lines, six-field expressions with seconds and `@reboot`,
+  and puts the edited expression back in the document.
+- Epoch to ISO 8601 in local time, with the UTC offset, next to UTC: in the right-click
+  menu, the Date and Time menu and the CSV toolbar.
+
+### Changed
+
+- Relative times are shorter and exact to the minute, such as "in 1 h 8 min".
+
+### Removed
+
+- The *Use Local Time* option, replaced by the separate local time commands.
+
 ## [0.1.0] - 2026-10-13
 
 The first release, with downloads for macOS (Apple Silicon), Linux (AppImage, x86-64)
@@ -19,7 +40,7 @@ and Windows (installer, x86-64).
 - Live syntax checks for Python, JSON, YAML, XML, TOML and CSV.
 - Autocomplete from the words in the document and the language's keywords.
 - Find and replace with regular expressions, Find in Files with file filters.
-- Notepad++ shortcuts, such as toggle comment (`Ctrl+Q`) and find next (`F3`).
+- Classic editor shortcuts, such as toggle comment (`Ctrl+Q`) and find next (`F3`).
 
 ### Language tools
 

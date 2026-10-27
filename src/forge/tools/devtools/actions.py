@@ -244,14 +244,13 @@ def insert_epoch(api: ForgeAPI) -> None:
     _insert(api, datetimes.now_epoch())
 
 
-def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
+def _convert_times(api: ForgeAPI, to_iso: bool, local: bool = False) -> None:
     editor = _editor(api)
     if editor is None:
         return
     if not editor.has_selection():
         api.status(tr("Select the timestamps to convert."))
         return
-    local = bool(api.setting("local_time", False))
     text, count = timestamps.convert_in_text(editor.selected_text(), to_iso, local)
     if count:
         editor.replace_selection_and_select(text, 0, len(text))
@@ -260,6 +259,11 @@ def _convert_times(api: ForgeAPI, to_iso: bool) -> None:
 
 def epoch_to_iso(api: ForgeAPI) -> None:
     _convert_times(api, to_iso=True)
+
+
+def epoch_to_iso_local(api: ForgeAPI) -> None:
+    """Unix time as the local date and time with its UTC offset."""
+    _convert_times(api, to_iso=True, local=True)
 
 
 def iso_to_epoch(api: ForgeAPI) -> None:
@@ -280,9 +284,14 @@ def converter(api: ForgeAPI) -> None:
 
 
 def explain_cron(api: ForgeAPI) -> None:
+    from forge.tools.devtools.detect import is_cron
     from forge.tools.devtools.dialogs import CronDialog
 
-    CronDialog(api, _selection(api) or "0 9 * * MON-FRI").exec()
+    selected = _selection(api)
+    if selected and is_cron(selected):
+        CronDialog(api, selected, replace=True).exec()
+    else:
+        CronDialog(api, "0 9 * * MON-FRI").exec()
 
 
 def setting_changed(api: ForgeAPI) -> None:

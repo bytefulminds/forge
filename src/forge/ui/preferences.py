@@ -33,6 +33,7 @@ from forge.ui.framed_dialog import FramedDialog
 def theme_label(theme_id: str) -> str:
     labels = {
         "dark": tr("Forge Dark"),
+        "blue": tr("Forge Blue"),
         "light": tr("Forge Light"),
         SYSTEM_THEME_ID: tr("Follow System"),
     }

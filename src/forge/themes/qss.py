@@ -223,7 +223,22 @@ QPushButton#aboutLink {{
     border-radius: 6px; padding: 5px 12px;
 }}
 QPushButton#aboutLink:hover {{ background: {c.hover_bg}; }}
-QLabel#cronSummary {{ color: {c.text}; font-size: 14px; font-weight: 600; }}
+QLineEdit#cronInput {{
+    font-size: 24px; padding: 8px 12px; border-radius: 8px; background: {c.editor_bg};
+}}
+QLineEdit#cronInput[invalid="true"] {{ border-color: {c.error}; }}
+QLabel#cronSummary {{ color: {c.text}; font-size: 18px; font-weight: 600; padding: 2px 0; }}
+QLabel#cronSection {{ color: {c.text_muted}; font-size: 12px; font-weight: 600; }}
+QLabel#cronError {{ color: {c.error}; font-size: 13px; }}
+QFrame#cronField {{
+    background: {c.editor_bg}; border: 1px solid {c.border}; border-radius: 8px;
+}}
+QFrame#cronField[invalid="true"] {{ border-color: {c.error}; }}
+QLabel#cronFieldToken {{ color: {c.accent}; font-size: 17px; font-weight: 600; }}
+QLabel#cronFieldName {{ color: {c.text_muted}; font-size: 11px; font-weight: 600; }}
+QLabel#cronFieldMeaning {{ color: {c.text}; font-size: 12px; }}
+QFrame#cronField[invalid="true"] QLabel#cronFieldMeaning {{ color: {c.error}; }}
+QTreeWidget#cronRuns, QTreeWidget#cronCheatSheet {{ background: {c.editor_bg}; }}
 QLabel#resultNote {{ color: {c.text_muted}; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};

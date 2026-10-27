@@ -153,10 +153,8 @@ class AboutDialog(FramedDialog):
         version.setObjectName("aboutVersion")
         description = QLabel(
             tr(
-                "A fast, lightweight text editor for macOS, Linux and Windows, in the "
-                "spirit of {notepad}, with tools for JSON, CSV, Markdown, XML and YAML.",
-                # Word joiners keep "Notepad++" on one line.
-                notepad="Notepad\u2060+\u2060+",
+                "A fast, lightweight text editor for macOS, Linux and Windows, built "
+                "around developer tooling for JSON, CSV, Markdown, XML and YAML."
             ),
             details,
         )

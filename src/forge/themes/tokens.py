@@ -17,6 +17,10 @@ CYAN: Final = "#20D7E8"  # Secondary highlight
 LIME: Final = "#B7FF4A"  # Accent, focus and success states (used sparingly)
 LIGHT: Final = "#E6F0FF"  # Text and light backgrounds
 
+# Forge Dark background: near black with a hint of the night blue, not pitch
+# black. Not part of the brand guide.
+GRAPHITE: Final = "#15171B"
+
 # Helpers for derivations
 WHITE: Final = "#FFFFFF"
 BLACK: Final = "#000000"

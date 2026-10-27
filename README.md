@@ -4,9 +4,9 @@
 
 # Forge
 
-**Fast, lightweight text editor for macOS, Linux and Windows, in the spirit of Notepad++.
-  Open a file, get to work. Tools for JSON, CSV, Markdown, XML and YAML are built in,
-  not bolted on.**
+**Fast, lightweight text editor for macOS, Linux and Windows, built around the tools a
+  developer reaches for every day. Open a file, get to work. Tools for JSON, CSV, Markdown,
+  XML and YAML are built in, not bolted on.**
 
 **Version 0.1.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
 
@@ -24,13 +24,13 @@
 ## Why Forge
 
 - **Starts fast, stays fast.** Large files load in the background. Above 20 MB, Forge turns off
-  the heavy features, as Notepad++ does, so even huge logs scroll smoothly.
+  the heavy features, so even huge logs scroll smoothly.
 - **Knows your files.** Every document gets a toolbar with the tools for its language:
   formatting, validation, previews and conversions, one click away.
 - **A developer's toolbox built in.** Hashes, Base64 and URL encoding, letter case,
   UUIDs, timestamps and cron expressions, from the Tools menu or a right click.
-- **Looks the same everywhere.** Forge draws its own window, menus and dialogs, in a dark
-  and a light theme, on macOS, Linux and Windows.
+- **Looks the same everywhere.** Forge draws its own window, menus and dialogs, in three
+  themes (Forge Dark, Forge Blue and Forge Light), on macOS, Linux and Windows.
 - **Never loses work.** Unsaved text and open tabs come back after a restart, and Forge
   notices when a file changes on disk.
 
@@ -66,12 +66,13 @@ Select text and right-click: encode or decode Base64, URLs, HTML and JSON string
 a JWT, change the letter case (camelCase, snake_case, kebab-case and more), sort or
 deduplicate lines, or hash it with MD5, SHA-1, SHA-256 and SHA-512. The Tools menu also
 hashes whole files, inserts UUIDs (version 4 or time ordered version 7, one or many) and
-the current date and time, converts between timestamps and dates, and explains cron
-expressions with their next run times.
+the current date and time, and converts between timestamps and dates, in UTC or your
+local time. The cron window explains an expression in plain words, per field, with its next
+run times and a cheat sheet, and puts the result back in your file.
 
 ![Right-click menu on a selection with the Text tools open](docs/images/forge-dev-tools.png)
 
-![Cron expression explained in plain words with the next ten runs](docs/images/forge-cron.png)
+![Cron window with the expression in words, a card per field, the next runs and a cheat sheet](docs/images/forge-cron.png)
 
 ### Compare two versions
 
@@ -91,9 +92,17 @@ options and file filters such as `*.py *.json !build`. Click a result to jump to
 
 Syntax highlighting for 23 languages, rainbow brackets and indentation, live syntax
 checks for Python, JSON, YAML, XML, TOML and CSV, autocomplete from the words in your
-file, and Notepad++ shortcuts that your fingers already know.
+file, and the classic editor shortcuts your fingers already know.
 
 ![Python file in the light theme with rainbow brackets and an underlined syntax error](docs/images/forge-light.png)
+
+### Three themes
+
+Forge Dark is near black with grey surfaces, Forge Blue has the deep night blue of the Forge
+brand, and Forge Light is for bright rooms. *Follow System* switches between dark and light
+with your operating system.
+
+![Forge Dark theme with a Markdown document and its preview](docs/images/forge-dark.png)
 
 ### Yours in two languages
 
@@ -174,7 +183,7 @@ src/forge/
   core/        documents, encodings, line endings, file IO, settings, CSV parsing (no widgets)
   editor/      the QScintilla based editor, lexers, syntax checks, bracket colors
   ui/          main window, tabs, toolbar, previews, dialogs, status bar
-  themes/      design tokens, dark and light themes, stylesheet
+  themes/      design tokens, the three themes, stylesheet
   i18n/        translation catalogs and tr()
   extensions/  the internal API the built-in tools use
   tools/       JSON, YAML, XML, Markdown, CSV, Compare, Find in Files
