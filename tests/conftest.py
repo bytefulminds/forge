@@ -13,6 +13,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # The rich Markdown preview (Qt WebEngine) has its own tests; the others use
 # the basic preview so they stay fast and need no browser engine.
 os.environ.setdefault("FORGE_BASIC_MARKDOWN", "1")
+# No automatic update checks over the network while testing.
+os.environ.setdefault("FORGE_NO_UPDATE_CHECK", "1")
 
 from PyQt6.QtCore import QCoreApplication, Qt
 

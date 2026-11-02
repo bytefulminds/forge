@@ -214,6 +214,12 @@ class AboutDialog(FramedDialog):
         footer.addWidget(family, 1)
         footer.addWidget(buttons)
         layout.addLayout(footer)
+        # Not translated on purpose: the pun only works in English.
+        motto = QLabel("May the Forge be with you.", details)
+        motto.setObjectName("aboutMotto")
+        motto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(4)
+        layout.addWidget(motto)
         return details
 
     def _copy_info(self) -> None:

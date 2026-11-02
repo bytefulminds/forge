@@ -163,6 +163,18 @@ class PreferencesDialog(FramedDialog):
         self.native_dialogs.setChecked(self.settings.general.native_file_dialogs)
         form.addRow("", self.native_dialogs)
 
+        # Updates -------------------------------------------------------------
+        form.addRow(_section(tr("Updates")))
+        self.check_updates = QCheckBox(tr("Check for updates automatically"), self)
+        self.check_updates.setToolTip(
+            tr(
+                "Once a day, at startup, Forge asks gitlab.com for the latest version. "
+                "Your files and settings are never sent."
+            )
+        )
+        self.check_updates.setChecked(self.settings.updates.check_automatically)
+        form.addRow("", self.check_updates)
+
         layout.addStretch(1)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -189,6 +201,7 @@ class PreferencesDialog(FramedDialog):
             self.autocomplete,
             self.remember_session,
             self.native_dialogs,
+            self.check_updates,
         ):
             box.toggled.connect(self._changed)
         self._loading = False
@@ -212,6 +225,7 @@ class PreferencesDialog(FramedDialog):
         self.settings.appearance.language = str(self.language.currentData())
         self.settings.general.remember_session = self.remember_session.isChecked()
         self.settings.general.native_file_dialogs = self.native_dialogs.isChecked()
+        self.settings.updates.check_automatically = self.check_updates.isChecked()
 
     def _changed(self) -> None:
         if self._loading:

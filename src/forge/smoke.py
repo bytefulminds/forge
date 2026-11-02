@@ -44,6 +44,7 @@ def requested(argv: list[str]) -> bool:
 def prepare_environment() -> Path:
     """Before QApplication: no screen needed, and no real user settings touched."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    os.environ.setdefault("FORGE_NO_UPDATE_CHECK", "1")
     if not os.environ.get("FORGE_HOME"):
         os.environ["FORGE_HOME"] = tempfile.mkdtemp(prefix="forge-smoke-")
     # Chromium refuses its sandbox when run as root (CI containers).
@@ -147,6 +148,22 @@ def _check_documents(window: object, folder: Path) -> str:
     return f"{len(opened)} documents"
 
 
+def _check_tls() -> str:
+    """The updater talks to gitlab.com over HTTPS through Qt's TLS backend."""
+    from PyQt6.QtNetwork import QSslSocket
+
+    if not QSslSocket.supportsSsl():
+        raise RuntimeError("no TLS backend: Forge cannot check for updates")
+    return QSslSocket.activeBackend()
+
+
+def _check_update_kind() -> str:
+    """How this build would install an update (appimage, macos-app, windows-installer)."""
+    from forge.core.updates import installation_kind
+
+    return installation_kind() or "none: runs from source or unpacked"
+
+
 def _check_web_preview() -> str:
     from forge.ui.previews import rich_markdown_available
 
@@ -186,6 +203,8 @@ def run(window: object, home: Path, argv: list[str]) -> int:
     samples = home / "samples"
     samples.mkdir(parents=True, exist_ok=True)
     report.check("open documents", lambda: _check_documents(window, samples))
+    report.check("secure connections", _check_tls)
+    report.check("self update", _check_update_kind)
     report.check("rich Markdown preview", _check_web_preview)
     report.add("PASSED" if report.failed == 0 else f"FAILED ({report.failed})")
     for arg in argv:

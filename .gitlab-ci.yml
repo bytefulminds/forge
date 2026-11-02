@@ -186,15 +186,16 @@ build:linux-appimage:
     - ./packaging/build_appimage.sh
     - FILE="Forge-${VERSION}-linux-x86_64.AppImage"
     - |
-      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+      for upload in "${FILE}" "${FILE}.sha256"; do
         curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-          --upload-file "dist/${FILE}" "${PACKAGE_URL}/${VERSION}/${FILE}"
-      fi
+          --upload-file "dist/${upload}" "${PACKAGE_URL}/${VERSION}/${upload}"
+      done
   artifacts:
     when: always
     expire_in: 1 week
     paths:
       - dist/*.AppImage
+      - dist/*.sha256
       - build/smoke-linux.txt
       - build/release-notes.md
     reports:
@@ -209,15 +210,16 @@ build:macos:
     - bash packaging/macos/build_dmg.sh
     - FILE="Forge-${VERSION}-macos-arm64.dmg"
     - |
-      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+      for upload in "${FILE}" "${FILE}.sha256"; do
         curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-          --upload-file "dist/${FILE}" "${PACKAGE_URL}/${VERSION}/${FILE}"
-      fi
+          --upload-file "dist/${upload}" "${PACKAGE_URL}/${VERSION}/${upload}"
+      done
   artifacts:
     when: always
     expire_in: 1 week
     paths:
       - dist/*.dmg
+      - dist/*.sha256
       - build/smoke-macos.txt
 
 build:windows:
@@ -230,9 +232,9 @@ build:windows:
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - $file = "Forge-$version-setup.exe"
     - |
-      if ($env:CI_COMMIT_TAG) {
+      foreach ($upload in @($file, "$file.sha256")) {
         curl.exe --fail-with-body --header "JOB-TOKEN: $env:CI_JOB_TOKEN" `
-          --upload-file "packaging\windows\Output\$file" "$env:PACKAGE_URL/$version/$file"
+          --upload-file "packaging\windows\Output\$upload" "$env:PACKAGE_URL/$version/$upload"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       }
   artifacts:
@@ -240,6 +242,7 @@ build:windows:
     expire_in: 1 week
     paths:
       - packaging/windows/Output/*.exe
+      - packaging/windows/Output/*.sha256
       - build/smoke-windows.txt
 
 # --- release ---------------------------------------------------------------------

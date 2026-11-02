@@ -21,6 +21,11 @@ LIGHT: Final = "#E6F0FF"  # Text and light backgrounds
 # black. Not part of the brand guide.
 GRAPHITE: Final = "#15171B"
 
+# macOS window buttons ("traffic lights"), as drawn by macOS itself.
+MAC_CLOSE: Final = "#FF5F57"
+MAC_MINIMIZE: Final = "#FEBC2E"
+MAC_ZOOM: Final = "#28C840"
+
 # Helpers for derivations
 WHITE: Final = "#FFFFFF"
 BLACK: Final = "#000000"

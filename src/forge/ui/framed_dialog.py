@@ -19,7 +19,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from forge.ui.title_bar import IS_MAC, WindowButton
+from forge.ui import window_buttons
+from forge.ui.title_bar import IS_MAC, build_groups
+from forge.ui.window_buttons import CLOSE
 
 DIALOG_TITLE_HEIGHT = 34
 
@@ -35,16 +37,23 @@ class DialogTitleBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.close_button = WindowButton("close", self)
-        self.close_button.setFixedSize(42, DIALOG_TITLE_HEIGHT)
+        # Only a close button, on the side where the system puts it.
+        left, right = build_groups(self, window_buttons.current(), only=(CLOSE,))
+        self.close_button = (left.buttons or right.buttons)[CLOSE]
+        if not window_buttons.current().mac:
+            self.close_button.setFixedSize(42, DIALOG_TITLE_HEIGHT)
+            for group in (left, right):
+                group.setFixedWidth(sum(b.width() for b in group.buttons.values()))
         self.close_button.clicked.connect(dialog.reject)
         self.title = QLabel(dialog.windowTitle(), self)
         self.title.setObjectName("dialogTitle")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        layout.addSpacing(self.close_button.width())  # keeps the title centered
+        layout.addWidget(left)
+        layout.addSpacing(max(0, right.width() - left.width()))  # keeps the title centered
         layout.addWidget(self.title, 1)
-        layout.addWidget(self.close_button)
+        layout.addSpacing(max(0, left.width() - right.width()))
+        layout.addWidget(right)
         dialog.windowTitleChanged.connect(self.title.setText)
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:

@@ -47,4 +47,7 @@ hdiutil create -volname "Forge ${VERSION}" -srcfolder "$STAGING" -fs HFS+ \
     -format UDZO -imagekey zlib-level=9 -ov "$DMG"
 hdiutil verify "$DMG"
 
+# Checksum for the updater, which refuses a download that does not match.
+(cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
+
 echo "Built $DMG ($(du -h "$DMG" | cut -f1))"

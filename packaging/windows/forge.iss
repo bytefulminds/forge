@@ -132,3 +132,11 @@ Root: HKA; Subkey: "Software\Classes\.patch\OpenWithProgids"; ValueType: string;
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; After an update from within Forge (setup /SILENT /restart=1): start Forge again.
+Filename: "{app}\{#AppExe}"; Flags: nowait skipifnotsilent; Check: RestartAfterUpdate
+
+[Code]
+function RestartAfterUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:restart|0}') = '1';
+end;

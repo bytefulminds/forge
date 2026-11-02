@@ -1,9 +1,11 @@
 """Forge styled window header: a title bar row with the menu row below it.
 
 The window is frameless on every platform so Forge looks the same on macOS,
-Linux and Windows: icon on the left, centered title, and minimize, maximize
-and close on the right. Dragging the title bar moves the window,
-double-clicking maximizes, and ``EdgeResizer`` resizes from the edges.
+Linux and Windows, but the window buttons follow the system: traffic lights
+on the left on macOS, minimize, maximize and close on the right on Windows,
+and the desktop's own button layout on Linux (see window_buttons). Dragging
+the title bar moves the window, double-clicking maximizes (zooms), and
+``EdgeResizer`` resizes from the edges.
 """
 
 from __future__ import annotations
@@ -11,7 +13,17 @@ from __future__ import annotations
 import sys
 
 from PyQt6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, Qt
-from PyQt6.QtGui import QColor, QCursor, QIcon, QMouseEvent, QPainter, QPaintEvent, QPen
+from PyQt6.QtGui import (
+    QColor,
+    QCursor,
+    QEnterEvent,
+    QIcon,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPen,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -24,46 +36,78 @@ from PyQt6.QtWidgets import (
 )
 
 from forge.i18n.translator import tr
+from forge.themes import tokens
+from forge.ui import window_buttons
+from forge.ui.window_buttons import CLOSE, MAXIMIZE, MINIMIZE, ButtonLayout
 
 IS_MAC = sys.platform == "darwin"
 TITLE_BAR_HEIGHT = 34
 RESIZE_MARGIN = 6
+FLAT_BUTTON_WIDTH = 46
+LIGHT_SIZE = 12  # diameter of a macOS traffic light
+LIGHT_STEP = 20  # from one light to the next
+LIGHT_MARGIN = 12  # from the window edge to the first light
+
+_LIGHT_COLORS = {CLOSE: tokens.MAC_CLOSE, MINIMIZE: tokens.MAC_MINIMIZE, MAXIMIZE: tokens.MAC_ZOOM}
+
+
+def _tooltip(kind: str, mac: bool, expanded: bool = False) -> str:
+    if kind == CLOSE:
+        return tr("Close Window")
+    if kind == MINIMIZE:
+        return tr("Minimize")
+    if mac:
+        return tr("Exit Full Screen") if expanded else tr("Enter Full Screen")
+    return tr("Restore") if expanded else tr("Maximize")
 
 
 class WindowButton(QToolButton):
-    """Minimize, maximize/restore or close, drawn with thin vector glyphs."""
+    """Minimize, maximize/restore or close: thin vector glyphs, or a macOS
+    traffic light with ``mac``."""
 
-    def __init__(self, kind: str, parent: QWidget | None = None) -> None:
+    def __init__(self, kind: str, parent: QWidget | None = None, mac: bool = False) -> None:
         super().__init__(parent)
         self.kind = kind
-        self.maximized = False
-        self.setObjectName("windowButtonClose" if kind == "close" else "windowButton")
-        self.setFixedSize(46, TITLE_BAR_HEIGHT)
+        self.mac = mac
+        self.maximized = False  # maximized, or full screen for a macOS zoom button
+        self.active = True  # window has focus (macOS greys inactive lights)
+        self.hovered_group = False  # macOS shows the glyphs when the group is hovered
+        self.setObjectName(
+            "windowLight" if mac else ("windowButtonClose" if kind == CLOSE else "windowButton")
+        )
+        if mac:
+            self.setFixedSize(LIGHT_STEP, TITLE_BAR_HEIGHT)
+        else:
+            self.setFixedSize(FLAT_BUTTON_WIDTH, TITLE_BAR_HEIGHT)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        tooltips = {
-            "minimize": tr("Minimize"),
-            "maximize": tr("Maximize"),
-            "close": tr("Close Window"),
-        }
-        self.setToolTip(tooltips[kind])
+        self.setToolTip(_tooltip(kind, mac))
+        self.setAccessibleName(self.toolTip())
+
+    def set_maximized(self, maximized: bool) -> None:
+        self.maximized = maximized
+        self.setToolTip(_tooltip(self.kind, self.mac, maximized))
+        self.update()
 
     def paintEvent(self, event: QPaintEvent | None) -> None:
+        if self.mac:
+            self._paint_light()
+            return
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         color = self.palette().color(self.foregroundRole())
-        if self.kind == "close" and self.underMouse():
+        if self.kind == CLOSE and self.underMouse():
             color = QColor(Qt.GlobalColor.white)
         pen = QPen(color)
         pen.setWidthF(1.1)
         painter.setPen(pen)
         c = QPointF(self.width() / 2, self.height() / 2)
         s = 5.0
-        if self.kind == "minimize":
+        if self.kind == MINIMIZE:
             painter.drawLine(QPointF(c.x() - s, c.y()), QPointF(c.x() + s, c.y()))
-        elif self.kind == "maximize" and not self.maximized:
+        elif self.kind == MAXIMIZE and not self.maximized:
             painter.drawRect(QRectF(c.x() - s, c.y() - s, 2 * s, 2 * s))
-        elif self.kind == "maximize":
+        elif self.kind == MAXIMIZE:
             painter.drawRect(QRectF(c.x() - s, c.y() - s + 2, 2 * s - 2, 2 * s - 2))
             painter.drawPolyline(
                 QPointF(c.x() - s + 2, c.y() - s + 2),
@@ -77,24 +121,128 @@ class WindowButton(QToolButton):
             painter.drawLine(QPointF(c.x() - s, c.y() + s), QPointF(c.x() + s, c.y() - s))
         painter.end()
 
+    def _paint_light(self) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        c = QPointF(self.width() / 2, self.height() / 2)
+        r = LIGHT_SIZE / 2
+        if self.active or self.hovered_group:
+            fill = QColor(_LIGHT_COLORS[self.kind])
+            if self.isDown():
+                fill = fill.darker(115)
+        else:
+            fill = QColor(self.palette().color(self.foregroundRole()))
+            fill.setAlphaF(0.28)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawEllipse(c, r, r)
+        if self.hovered_group:
+            glyph = QColor(0, 0, 0, 150)
+            pen = QPen(glyph)
+            pen.setWidthF(1.2)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            g = 2.6
+            if self.kind == CLOSE:
+                painter.drawLine(QPointF(c.x() - g, c.y() - g), QPointF(c.x() + g, c.y() + g))
+                painter.drawLine(QPointF(c.x() - g, c.y() + g), QPointF(c.x() + g, c.y() - g))
+            elif self.kind == MINIMIZE:
+                painter.drawLine(QPointF(c.x() - g - 0.6, c.y()), QPointF(c.x() + g + 0.6, c.y()))
+            else:
+                # Two small triangles pointing apart (in) or together (out of full screen).
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(glyph)
+                t = 3.2
+                for sign in (-1, 1):
+                    corner = QPointF(c.x() + sign * t, c.y() + sign * t)
+                    if self.maximized:
+                        corner = QPointF(c.x() + sign * 0.6, c.y() + sign * 0.6)
+                    tip = -1 if self.maximized else 1
+                    path = QPainterPath(corner)
+                    path.lineTo(QPointF(corner.x() - sign * t * 1.15 * tip, corner.y()))
+                    path.lineTo(QPointF(corner.x(), corner.y() - sign * t * 1.15 * tip))
+                    path.closeSubpath()
+                    painter.drawPath(path)
+        painter.end()
+
+
+class ButtonGroup(QWidget):
+    """The window buttons on one side of a title bar. Hovering a group of
+    macOS traffic lights shows the glyphs on all of them, as macOS does."""
+
+    def __init__(self, kinds: tuple[str, ...], mac: bool, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.mac = mac
+        layout = QHBoxLayout(self)
+        margin = LIGHT_MARGIN - (LIGHT_STEP - LIGHT_SIZE) // 2 if mac else 0
+        layout.setContentsMargins(margin, 0, margin if mac else 0, 0)
+        layout.setSpacing(0)
+        self.buttons: dict[str, WindowButton] = {}
+        for kind in kinds:
+            button = WindowButton(kind, self, mac)
+            layout.addWidget(button)
+            self.buttons[kind] = button
+        self.setFixedWidth(
+            sum(b.width() for b in self.buttons.values()) + (2 * margin if kinds and mac else 0)
+        )
+
+    def enterEvent(self, event: QEnterEvent | None) -> None:
+        self._hover(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent | None) -> None:
+        self._hover(False)
+        super().leaveEvent(event)
+
+    def _hover(self, hovered: bool) -> None:
+        if self.mac:
+            for button in self.buttons.values():
+                button.hovered_group = hovered
+                button.update()
+
+    def set_active(self, active: bool) -> None:
+        for button in self.buttons.values():
+            button.active = active
+            button.update()
+
+
+def build_groups(
+    parent: QWidget, layout: ButtonLayout, only: tuple[str, ...] | None = None
+) -> tuple[ButtonGroup, ButtonGroup]:
+    """Left and right button groups; ``only`` limits the kinds (dialogs: close)."""
+
+    def pick(kinds: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(k for k in kinds if only is None or k in only)
+
+    left, right = pick(layout.left), pick(layout.right)
+    if only is not None and not left and not right:
+        right = only  # the desktop hides close; a dialog still needs one
+    return ButtonGroup(left, layout.mac, parent), ButtonGroup(right, layout.mac, parent)
+
 
 class TitleBar(QWidget):
-    """Top row: icon, centered title and window buttons."""
+    """Top row: window buttons where the system puts them, a centered title,
+    and the app icon (not on macOS, where windows show none)."""
 
     def __init__(
-        self, window: QWidget, icon: QIcon | None = None, parent: QWidget | None = None
+        self,
+        window: QWidget,
+        icon: QIcon | None = None,
+        parent: QWidget | None = None,
+        layout_spec: ButtonLayout | None = None,
     ) -> None:
         super().__init__(parent or window)
         self._window = window
         self._drag_offset: QPoint | None = None
+        self.button_layout = layout_spec or window_buttons.current()
         self.setObjectName("titleBar")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
         self.setFixedHeight(TITLE_BAR_HEIGHT)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
 
         self.icon = QLabel(self)
         self.icon.setObjectName("titleIcon")
@@ -103,26 +251,57 @@ class TitleBar(QWidget):
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self.min_button = WindowButton("minimize", self)
-        self.max_button = WindowButton("maximize", self)
-        self.close_button = WindowButton("close", self)
-        self.min_button.clicked.connect(window.showMinimized)
-        self.max_button.clicked.connect(self.toggle_maximized)
-        self.close_button.clicked.connect(window.close)
-        buttons = (self.min_button, self.max_button, self.close_button)
+        self.left_group, self.right_group = build_groups(self, self.button_layout)
+        self.buttons = {**self.left_group.buttons, **self.right_group.buttons}
+        for kind, button in self.buttons.items():
+            button.clicked.connect(
+                {
+                    MINIMIZE: window.showMinimized,
+                    MAXIMIZE: self._maximize_clicked,
+                    CLOSE: window.close,
+                }[kind]
+            )
 
-        left = 0
-        if icon is not None:
+        left_width = self.left_group.width()
+        right_width = self.right_group.width()
+        row.addWidget(self.left_group)
+        if icon is not None and not self.button_layout.mac and not self.left_group.buttons:
             self.icon.setPixmap(icon.pixmap(18, 18))
-            layout.addSpacing(10)
-            layout.addWidget(self.icon)
-            left = 10 + 18
-        # Balance the window buttons so the title is centered on the window.
-        layout.addSpacing(sum(b.width() for b in buttons) - left)
-        layout.addWidget(self.title, 1)
-        for button in buttons:
-            layout.addWidget(button)
+            row.addSpacing(10)
+            row.addWidget(self.icon)
+            left_width += 10 + 18
+        else:
+            self.icon.hide()
+        # Balance both sides so the title is centered on the window.
+        row.addSpacing(max(0, right_width - left_width))
+        row.addWidget(self.title, 1)
+        row.addSpacing(max(0, left_width - right_width))
+        row.addWidget(self.right_group)
         window.windowTitleChanged.connect(self.title.setText)
+
+    # Compatibility with the old fixed layout (tests, callers).
+    @property
+    def min_button(self) -> WindowButton | None:
+        return self.buttons.get(MINIMIZE)
+
+    @property
+    def max_button(self) -> WindowButton | None:
+        return self.buttons.get(MAXIMIZE)
+
+    @property
+    def close_button(self) -> WindowButton | None:
+        return self.buttons.get(CLOSE)
+
+    def _maximize_clicked(self) -> None:
+        # The green macOS button means full screen; double-clicking the title
+        # bar zooms (maximizes), as macOS does by default.
+        if self.button_layout.mac:
+            if self._window.isFullScreen():
+                self._window.showNormal()
+            else:
+                self._window.showFullScreen()
+        else:
+            self.toggle_maximized()
 
     def toggle_maximized(self) -> None:
         if self._window.isMaximized():
@@ -131,9 +310,18 @@ class TitleBar(QWidget):
             self._window.showMaximized()
 
     def update_state(self) -> None:
-        self.max_button.maximized = self._window.isMaximized()
-        self.max_button.setToolTip(tr("Restore") if self.max_button.maximized else tr("Maximize"))
-        self.max_button.update()
+        button = self.max_button
+        if button is not None:
+            expanded = (
+                self._window.isFullScreen()
+                if self.button_layout.mac
+                else self._window.isMaximized()
+            )
+            button.set_maximized(expanded)
+
+    def set_active(self, active: bool) -> None:
+        self.left_group.set_active(active)
+        self.right_group.set_active(active)
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:
         if event is not None and event.button() == Qt.MouseButton.LeftButton:

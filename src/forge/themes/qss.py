@@ -30,6 +30,7 @@ QToolButton#windowButton, QToolButton#windowButtonClose {{
 QToolButton#windowButton:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 QToolButton#windowButton:pressed {{ background: {c.pressed_bg}; }}
 QToolButton#windowButtonClose:hover {{ background: {c.error}; }}
+QToolButton#windowLight {{ border: none; background: transparent; color: {c.text_muted}; }}
 
 QMenuBar {{ background: {c.chrome_bg}; border-bottom: 1px solid {c.border}; padding: 2px 4px; }}
 QMenuBar::item {{
@@ -147,6 +148,9 @@ QToolButton#docToolButton:pressed {{ background: {c.menu_selected_bg}; }}
 QToolButton#docToolButton:checked {{ background: {c.menu_selected_bg}; }}
 QFrame#docToolSeparator {{ background: {c.border}; margin: 0 4px; }}
 QTextBrowser#markdownPreview {{ background: {c.editor_bg}; border: none; }}
+QTextBrowser#updateNotes {{
+    background: {c.editor_bg}; border: 1px solid {c.border}; border-radius: 6px; padding: 6px;
+}}
 QTableView#csvTable {{
     background: {c.editor_bg}; alternate-background-color: {c.caret_line};
     gridline-color: {c.border}; border: none; color: {c.text};
@@ -217,6 +221,7 @@ QFileDialog QLabel {{ color: {c.text_muted}; }}
 QSizeGrip {{ width: 12px; height: 12px; }}
 QLabel#aboutVersion {{ color: {c.text}; font-size: 15px; font-weight: 600; }}
 QLabel#aboutCredits {{ color: {c.text_muted}; font-size: 12px; }}
+QLabel#aboutMotto {{ color: {c.text_muted}; font-size: 12px; font-style: italic; }}
 QFrame#aboutRule {{ background: {c.border}; }}
 QPushButton#aboutLink {{
     background: transparent; color: {c.accent}; border: 1px solid {c.border_strong};

@@ -16,9 +16,18 @@ this file by `scripts/release_notes.py`, so every release needs a section here.
   and puts the edited expression back in the document.
 - Epoch to ISO 8601 in local time, with the UTC offset, next to UTC: in the right-click
   menu, the Date and Time menu and the CSV toolbar.
+- Updates: Forge checks once a day for a new version and installs it with one click
+  (Install and Restart), after checking its SHA-256. On Windows the setup runs silently,
+  on Linux the AppImage is replaced and on macOS the app. Help > Check for Updates checks
+  right away; the daily check can be turned off in Preferences. Versions from before
+  this one have no updater, so 0.1.0 has to be updated by hand once.
 
 ### Changed
 
+- The window buttons follow the system: traffic lights on the left on macOS (the green
+  one for full screen), minimize, maximize and close on the right on Windows, and the
+  desktop's own button layout on Linux (GNOME and other GTK desktops, KDE). Dialogs put
+  their close button on the same side.
 - Relative times are shorter and exact to the minute, such as "in 1 h 8 min".
 
 ### Removed

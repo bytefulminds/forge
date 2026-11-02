@@ -62,6 +62,33 @@ AppImageLauncher. Where the system blocks the browser sandbox (Ubuntu 24.04 and 
 when running as root), the AppImage switches the sandbox of the Markdown preview off; the
 preview only shows local files.
 
+### Updates
+
+Forge keeps itself up to date. Once a day, a few seconds after it starts, it asks
+gitlab.com for the latest version; your files and settings are never sent. When there is a
+new version, a bar at the bottom of the window says so:
+
+- **Install and Restart** downloads the new version for your system, checks that it arrived
+  intact (against the SHA-256 published with the release) and installs it. Forge then
+  closes and starts again; your open tabs and unsaved text come back, as after any restart.
+- **What's New** shows the release notes first. There you can also choose **Skip This
+  Version**, and Forge stays quiet until the next one.
+- Close the bar with **×** to be reminded the next day.
+
+**Help > Check for Updates** checks right away. Turn the daily check off in Preferences
+(section 16).
+
+How the new version is installed:
+
+- **Windows:** the setup runs without questions and starts Forge again. If Forge is
+  installed for all users, Windows asks for permission first.
+- **Linux:** the AppImage file is replaced by the new one, so its folder must be writable.
+- **macOS:** the new Forge.app is copied out of the disk image and takes the place of the
+  old one when Forge has closed. macOS does not ask again, because Forge downloaded it
+  itself.
+
+When Forge runs from source, it only tells you about a new version; update with `git pull`.
+
 ### From source
 
 Forge also runs from source with [uv](https://docs.astral.sh/uv/getting-started/installation/),
@@ -82,7 +109,11 @@ uv run forge a.md b.csv # start Forge and open files
 From top to bottom:
 
 - **Title bar** with the full path of the document. Drag it to move the window,
-  double-click it to maximize.
+  double-click it to maximize. The window buttons sit where your system puts them:
+  - macOS: close, minimize and full screen as the familiar colored buttons on the left.
+  - Windows: minimize, maximize and close on the right.
+  - Linux: as set in your desktop. On GNOME, for example, that is only a close button on
+    the right unless you changed it; KDE uses its own button layout.
 - **Menu bar:** File, Edit, Search, View, Encoding, Language, Settings, Tools and Help.
 - **Tabs**, one per document. A dot instead of the close button means unsaved changes.
   - Click `+`, or double-click the empty part of the tab bar, for a new document.
@@ -485,6 +516,7 @@ Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes the
 | | Autocomplete and after how many characters |
 | Appearance | Theme (Forge Dark, Forge Blue, Forge Light or follow the system) and interface language (English or Nederlands) |
 | Session | Remember open tabs and unsaved text; use the system file dialogs |
+| Updates | Check for updates automatically, once a day at startup (on by default) |
 
 The interface language changes after a restart.
 
@@ -536,6 +568,8 @@ If something goes wrong, the log usually says why; please attach it when you rep
 problem.
 
 ## 20. About Forge
+
+Help > Check for Updates looks for a new version right away (see section 1).
 
 Help > About Forge shows the version, links to this manual, the source code and the issue
 tracker, and the software Forge is built with. **Copy System Info** puts the Forge, Python,

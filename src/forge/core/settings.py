@@ -60,6 +60,16 @@ class AppearanceSettings:
 
 
 @dataclass
+class UpdateSettings:
+    # Look for a new release at startup, at most once a day.
+    check_automatically: bool = True
+    # When the last automatic check ran (ISO 8601, UTC).
+    last_check: str = ""
+    # A version the user chose to skip; it is not offered again.
+    skipped_version: str = ""
+
+
+@dataclass
 class WindowSettings:
     # Base64 encoded QMainWindow.saveGeometry(); empty means "use the default size".
     geometry: str = ""
@@ -71,6 +81,7 @@ class Settings:
     editor: EditorSettings = field(default_factory=EditorSettings)
     appearance: AppearanceSettings = field(default_factory=AppearanceSettings)
     window: WindowSettings = field(default_factory=WindowSettings)
+    updates: UpdateSettings = field(default_factory=UpdateSettings)
     # Per built-in tool settings, keyed by extension id (see ForgeAPI.setting).
     tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     schema: int = SCHEMA_VERSION
@@ -91,6 +102,7 @@ class Settings:
             editor=_build(EditorSettings, raw.get("editor", {})),
             appearance=_build(AppearanceSettings, raw.get("appearance", {})),
             window=_build(WindowSettings, raw.get("window", {})),
+            updates=_build(UpdateSettings, raw.get("updates", {})),
             tools=_tools(raw.get("tools", {})),
         )
 

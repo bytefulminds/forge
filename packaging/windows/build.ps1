@@ -59,5 +59,8 @@ if ($Smoke.ExitCode -ne 0) { throw "Smoke test failed (exit code $($Smoke.ExitCo
 Invoke-Checked $Iscc @("/Qp", "/DAppVersion=$Version", "packaging\windows\forge.iss")
 $Setup = "packaging\windows\Output\Forge-$Version-setup.exe"
 if (-not (Test-Path $Setup)) { throw "$Setup was not created" }
+# Checksum for the updater, which refuses a download that does not match.
+$Hash = (Get-FileHash -Algorithm SHA256 $Setup).Hash.ToLower()
+[IO.File]::WriteAllText((Join-Path $Root "$Setup.sha256"), "$Hash  Forge-$Version-setup.exe`n")
 $Size = [math]::Round((Get-Item $Setup).Length / 1MB)
 Write-Host "Built $Setup ($Size MB)"

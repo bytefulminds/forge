@@ -122,6 +122,9 @@ The downloads include everything, also the full Markdown preview with Mermaid di
 | Linux, x86-64 | `Forge-<version>-linux-x86_64.AppImage`: make it executable and run it |
 | Windows 10 or 11, x86-64 | `Forge-<version>-setup.exe`: run the setup |
 
+After that, Forge keeps itself up to date: when there is a new version it offers to
+install it and restart, on every system. You can turn this off in Preferences.
+
 Forge is not signed by Apple or Microsoft yet. On macOS, allow the first start in
 *System Settings > Privacy & Security* with *Open Anyway*; on Windows, choose *More info*
 and *Run anyway* if SmartScreen warns. The [manual](MANUAL.md#1-installing-and-starting)
@@ -212,3 +215,11 @@ and [QScintilla](https://www.riverbankcomputing.com/software/qscintilla/). It bu
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+
+*May the Forge be with you.*
+
+</div>

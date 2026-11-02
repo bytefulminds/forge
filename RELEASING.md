@@ -84,6 +84,52 @@ powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
 
 The smoke test also works on a source checkout: `uv run forge --smoke-test`.
 
+## Updates
+
+Forge's updater (`src/forge/ui/updater.py`) reads the latest release from
+`https://gitlab.com/api/v4/projects/bytefulminds%2Fforge/releases/permalink/latest`, picks
+the link for its system by file name (`-macos-arm64.dmg`, `-linux-x86_64.AppImage`,
+`-setup.exe`) and downloads `<link>.sha256` next to it. Every build script writes that
+checksum file and CI uploads it with the package, so nothing in the release job changes.
+This needs a public project: the updater does not log in.
+
+Do not rename the packages, and keep the release links pointing at the package registry:
+installed copies of Forge depend on both.
+
+### Testing an update before a real one exists
+
+`FORGE_UPDATE_URL` points the updater at another release description, also a local file.
+Copy what GitLab returns for the current release and raise its version:
+
+```json
+{
+  "tag_name": "v9.9.9",
+  "description": "Test update",
+  "_links": {"self": "https://gitlab.com/bytefulminds/forge/-/releases"},
+  "assets": {"links": [
+    {"url": "https://gitlab.com/api/v4/projects/<id>/packages/generic/forge/X.Y.Z/Forge-X.Y.Z-macos-arm64.dmg"},
+    {"url": "https://gitlab.com/api/v4/projects/<id>/packages/generic/forge/X.Y.Z/Forge-X.Y.Z-linux-x86_64.AppImage"},
+    {"url": "https://gitlab.com/api/v4/projects/<id>/packages/generic/forge/X.Y.Z/Forge-X.Y.Z-setup.exe"}
+  ]}
+}
+```
+
+Start the installed Forge with the variable set and choose *Help > Check for Updates*.
+*Install and Restart* then reinstalls version X.Y.Z through the whole update path:
+
+```sh
+FORGE_UPDATE_URL=file:///Users/mark/fake-release.json /Applications/Forge.app/Contents/MacOS/Forge
+FORGE_UPDATE_URL=file:///home/mark/fake-release.json ~/Apps/Forge-X.Y.Z-linux-x86_64.AppImage
+```
+
+```powershell
+$env:FORGE_UPDATE_URL = "file:///C:/Users/mark/fake-release.json"
+& "$env:LOCALAPPDATA\Programs\Forge\Forge.exe"
+```
+
+`FORGE_NO_UPDATE_CHECK=1` turns the automatic check off (the tests and the smoke test set
+it).
+
 ## Signing
 
 The builds are not signed with an Apple Developer ID or a Windows code signing

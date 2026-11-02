@@ -80,6 +80,7 @@ from forge.ui.notice_bar import Notice, NoticeBar
 from forge.ui.preferences import PreferencesDialog, theme_label
 from forge.ui.status_bar import ForgeStatusBar
 from forge.ui.title_bar import EdgeResizer, WindowHeader
+from forge.ui.updater import Updater
 
 log = logging.getLogger(__name__)
 
@@ -184,6 +185,7 @@ class MainWindow(QMainWindow):
         self.tabs.setElideMode(Qt.TextElideMode.ElideMiddle)
         self.tabs.currentChanged.connect(self._on_current_changed)
         self.notice_bar = NoticeBar(self)
+        self.updater = Updater(self)
         central = QWidget(self)
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(0, 0, 0, 0)
@@ -193,6 +195,7 @@ class MainWindow(QMainWindow):
         self.find_bar = FindBar(self.current_tab, lambda text: self.status.showMessage(text, 4000))
         central_layout.addWidget(self.find_bar)
         central_layout.addWidget(self.notice_bar)
+        central_layout.addWidget(self.updater.bar)
         self.setCentralWidget(central)
         self.watcher = FileWatcher(self)
         self.watcher.changed.connect(self._on_changed_on_disk)
@@ -272,6 +275,7 @@ class MainWindow(QMainWindow):
         self._session_timer.start()
         # Tools that hook into editing start once the window is up.
         QTimer.singleShot(0, self.extension_host.start)
+        self.updater.schedule_automatic_check()
 
     # Tabs ----------------------------------------------------------------
 
@@ -852,6 +856,8 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def changeEvent(self, event: QEvent | None) -> None:
+        if event is not None and event.type() == QEvent.Type.ActivationChange:
+            self.title_bar.set_active(self.isActiveWindow())
         if (
             event is not None
             and event.type() == QEvent.Type.ActivationChange
@@ -1444,6 +1450,8 @@ class MainWindow(QMainWindow):
         self.settings.general = settings.general
         self.settings.editor = settings.editor
         self.settings.appearance = settings.appearance
+        # Only the switch: the dates and the skipped version belong to the updater.
+        self.settings.updates.check_automatically = settings.updates.check_automatically
         file_dialogs.use_native_dialogs = settings.general.native_file_dialogs
         for tab in self.all_tabs():
             tab.apply_settings(self.settings.editor)
@@ -1714,6 +1722,12 @@ class MainWindow(QMainWindow):
 
         help_menu = bar.addMenu(tr("&Help"))
         assert help_menu is not None
+        self._action(
+            help_menu,
+            tr("Check for &Updates..."),
+            lambda: self.updater.check(manual=True),
+            role=QAction.MenuRole.ApplicationSpecificRole,
+        )
         about_role = QAction.MenuRole.AboutRole
         self._action(help_menu, tr("&About Forge"), self.show_about, role=about_role)
 

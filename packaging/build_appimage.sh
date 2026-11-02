@@ -81,7 +81,19 @@ ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOLS/appimagetool-${APPIMAGETOOL_VERS
 chmod +x "$OUTPUT"
 
 # --- smoke test ---------------------------------------------------------------------
-APPIMAGE_EXTRACT_AND_RUN=1 "$ROOT/$OUTPUT" --smoke-test --smoke-report="$ROOT/build/smoke-linux.txt" \
-    || { echo "Smoke test failed" >&2; exit 1; }
+# Strict (exit code) on the AppDir, then once more through the AppImage itself,
+# judged by the report: in extract-and-run mode (no FUSE in CI) the AppImage
+# runtime sometimes exits with 127 while cleaning up after Forge has finished.
+"$APPDIR/AppRun" --smoke-test || { echo "Smoke test failed" >&2; exit 1; }
+REPORT="$ROOT/build/smoke-linux.txt"
+rm -f "$REPORT"
+APPIMAGE_EXTRACT_AND_RUN=1 "$ROOT/$OUTPUT" --smoke-test --smoke-report="$REPORT" || true
+if [ "$(tail -n 1 "$REPORT" 2>/dev/null)" != "PASSED" ]; then
+    echo "Smoke test of the AppImage failed" >&2
+    exit 1
+fi
+
+# Checksum for the updater, which refuses a download that does not match.
+(cd dist && sha256sum "$(basename "$OUTPUT")" > "$(basename "$OUTPUT").sha256")
 
 echo "Built $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
