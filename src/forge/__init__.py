@@ -1,6 +1,6 @@
 """Forge: a fast, lightweight text editor for macOS, Linux and Windows."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 APP_NAME = "Forge"
 APP_ID = "nl.bytefulminds.Forge"
 REPOSITORY_URL = "https://gitlab.com/bytefulminds/forge"

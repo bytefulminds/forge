@@ -4,7 +4,10 @@ All notable changes to Forge. The newest version is at the top. Versions follow
 [semantic versioning](https://semver.org). The release notes on GitLab are taken from
 this file by `scripts/release_notes.py`, so every release needs a section here.
 
-## [Unreleased]
+## [0.2.0] - 2026-11-02
+
+Forge now keeps itself up to date. Version 0.1.0 has no updater yet, so download this
+version once by hand; from here on Forge offers each new version itself.
 
 ### Added
 
@@ -19,8 +22,7 @@ this file by `scripts/release_notes.py`, so every release needs a section here.
 - Updates: Forge checks once a day for a new version and installs it with one click
   (Install and Restart), after checking its SHA-256. On Windows the setup runs silently,
   on Linux the AppImage is replaced and on macOS the app. Help > Check for Updates checks
-  right away; the daily check can be turned off in Preferences. Versions from before
-  this one have no updater, so 0.1.0 has to be updated by hand once.
+  right away; the daily check can be turned off in Preferences.
 
 ### Changed
 

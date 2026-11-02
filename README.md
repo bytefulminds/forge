@@ -8,7 +8,7 @@
   developer reaches for every day. Open a file, get to work. Tools for JSON, CSV, Markdown,
   XML and YAML are built in, not bolted on.**
 
-**Version 0.1.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
+**Version 0.2.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
 
 [![pipeline](https://gitlab.com/bytefulminds/Forge/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/Forge/-/pipelines)
 ![license: GPL](https://img.shields.io/badge/license-GPL--3.0-5CC8E8)
