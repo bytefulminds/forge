@@ -109,7 +109,12 @@ uv run forge a.md b.csv # start Forge and open files
 From top to bottom:
 
 - **Title bar** with the full path of the document. Drag it to move the window,
-  double-click it to maximize. The window buttons sit where your system puts them:
+  double-click it to maximize. An icon in front of the path shows the document's state
+  (hover the title bar for a short explanation):
+  - an amber dot: unsaved changes;
+  - a green check: saved;
+  - blue arrows: reloaded in the last half minute, because another program changed the
+    file. Editing the document, or saving it, ends this right away. The window buttons sit where your system puts them:
   - macOS: close, minimize and full screen as the familiar colored buttons on the left.
   - Windows: minimize, maximize and close on the right.
   - Linux: as set in your desktop. On GNOME, for example, that is only a close button on

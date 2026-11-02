@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import replace
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 
@@ -75,11 +77,12 @@ from forge.ui.extension_host import ExtensionHost
 from forge.ui.find_bar import FindBar
 from forge.ui.format_menus import EncodingMenu, EolMenu
 from forge.ui.goto_dialog import GoToLineDialog
+from forge.ui.icons import status_pixmap
 from forge.ui.language_picker import LanguageMenu
 from forge.ui.notice_bar import Notice, NoticeBar
 from forge.ui.preferences import PreferencesDialog, theme_label
 from forge.ui.status_bar import ForgeStatusBar
-from forge.ui.title_bar import EdgeResizer, WindowHeader
+from forge.ui.title_bar import STATUS_ICON_SIZE, EdgeResizer, WindowHeader
 from forge.ui.updater import Updater
 
 log = logging.getLogger(__name__)
@@ -110,6 +113,8 @@ NEW_TAB_BUTTON_SIZE = 24
 TAB_BUTTON_TOP_OFFSET = 4
 # Unsaved work is written to the session folder this often (and on quit).
 SESSION_AUTOSAVE_MS = 7000
+# How long the blue reload icon shows after a file changed outside Forge.
+RELOADED_SECONDS = 30
 # Files from this size load on a background thread with progress.
 ASYNC_LOAD_BYTES = 2_000_000
 # Files from this size open without highlighting, word wrap and folding.
@@ -394,6 +399,8 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(index, tab.title)
         self.tabs.setTabToolTip(index, str(tab.doc.path or tab.title))
         QTimer.singleShot(0, self._position_new_tab_button)
+        if tab.is_dirty:
+            tab.reloaded_at = None  # edited since: the reload is old news
         button = self._close_button(tab)
         if button is not None:
             # A dot replaces the close cross while there are unsaved changes,
@@ -442,9 +449,60 @@ class MainWindow(QMainWindow):
         if tab is None:
             self.setWindowTitle(APP_NAME)
             return
-        # Same title on every platform; Forge draws it in its own title bar.
+        # Same title on every platform; Forge draws it in its own title bar,
+        # with an icon for the document's state in front of it.
         name = str(tab.doc.path) if tab.doc.path else tab.title
-        self.setWindowTitle(f"{'*' if tab.is_dirty else ''}{name} - {APP_NAME}")
+        self.setWindowTitle(f"{name} - {APP_NAME}")
+        self._update_document_state(tab)
+
+    def _update_document_state(self, tab: DocumentTab) -> None:
+        """Amber dot: unsaved changes. Blue arrows: just reloaded because the
+        file changed outside Forge. Green check: saved."""
+        title_bar = getattr(self, "title_bar", None)
+        if title_bar is None:
+            return
+        theme = self.theme
+        reloaded = tab.reloaded_at is not None and (
+            time.monotonic() - tab.reloaded_at < RELOADED_SECONDS
+        )
+        if tab.is_dirty or (tab.doc.is_untitled and tab.length() > 0):
+            kind, icon, color = "unsaved", "dot", theme.warning
+            tooltip = tr("Unsaved changes")
+        elif reloaded and tab.reloaded_at is not None:
+            kind, icon, color = "reloaded", "refresh-cw", theme.accent
+            when = datetime.now() - timedelta(seconds=time.monotonic() - tab.reloaded_at)
+            tooltip = tr(
+                "Reloaded at {time}: the file was changed outside Forge",
+                time=when.strftime("%H:%M"),
+            )
+        elif tab.doc.path is not None:
+            kind, icon, color = "saved", "circle-check", theme.success
+            tooltip = tr("Saved")
+        else:
+            title_bar.set_status(None, None)
+            return
+        title_bar.set_status(kind, status_pixmap(icon, color, STATUS_ICON_SIZE), tooltip)
+
+    def _mark_reloaded(self, tab: DocumentTab) -> None:
+        """Show the blue reload icon for a while after an outside change."""
+        tab.reloaded_at = time.monotonic()
+        if tab is self.current_tab():
+            self._update_document_state(tab)
+        # Owned by the window, so it never fires after the window is gone.
+        if not hasattr(self, "_state_timer"):
+            self._state_timer = QTimer(self)
+            self._state_timer.setSingleShot(True)
+            self._state_timer.timeout.connect(self._state_expired)
+        self._state_timer.start(RELOADED_SECONDS * 1000 + 100)
+
+    def _state_expired(self) -> None:
+        tab = self.current_tab()
+        if tab is not None:
+            self._update_document_state(tab)
+
+    def _reload_external(self, tab: DocumentTab) -> None:
+        self.reload(tab)
+        self._mark_reloaded(tab)
 
     def _on_current_changed(self, _index: int) -> None:
         self._mark_session_changed()
@@ -767,9 +825,12 @@ class MainWindow(QMainWindow):
                 tr("Could not save {path}:\n{error}", path=str(path), error=str(exc)),
             )
             return False
+        tab.reloaded_at = None
         tab.setModified(False)
         if path == tab.doc.path:
             self.watcher.remember(path)
+        if tab is self.current_tab():
+            self._update_window_title()
         if tab.notice is not None and tab.notice.kind == "warning":
             self._set_notice(tab, None)
         return True
@@ -1033,7 +1094,7 @@ class MainWindow(QMainWindow):
                 continue
             if not tab.is_dirty:
                 # Nothing to lose: reload quietly and keep the view where it was.
-                self.reload(tab)
+                self._reload_external(tab)
                 self.status.showMessage(
                     tr("{name} was reloaded because it changed on disk.", name=tab.title), 4000
                 )
@@ -1048,7 +1109,7 @@ class MainWindow(QMainWindow):
                         name=tab.title,
                     ),
                     [
-                        (tr("Reload from Disk"), partial(self.reload, tab)),
+                        (tr("Reload from Disk"), partial(self._reload_external, tab)),
                         (tr("Keep My Version"), partial(self._set_notice, tab, None)),
                     ],
                 ),
@@ -1363,6 +1424,9 @@ class MainWindow(QMainWindow):
                 self.page_of(tab).apply_theme(theme)
         if hasattr(self, "extension_events"):
             self.extension_events.emit("theme_changed", theme)
+        current = self.current_tab()
+        if current is not None:
+            self._update_document_state(current)
 
     def apply_appearance(self) -> None:
         """Apply the configured theme; "system" follows the OS dark/light setting."""

@@ -536,3 +536,6 @@
 "{name} {version} is available" = "{name} {version} is beschikbaar"
 "Enter Full Screen" = "Volledig scherm"
 "Exit Full Screen" = "Volledig scherm verlaten"
+"Unsaved changes" = "Niet-opgeslagen wijzigingen"
+"Saved" = "Opgeslagen"
+"Reloaded at {time}: the file was changed outside Forge" = "Opnieuw geladen om {time}: het bestand is buiten Forge gewijzigd"

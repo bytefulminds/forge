@@ -23,6 +23,8 @@ from PyQt6.QtGui import (
     QPainterPath,
     QPaintEvent,
     QPen,
+    QPixmap,
+    QResizeEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
@@ -47,6 +49,7 @@ FLAT_BUTTON_WIDTH = 46
 LIGHT_SIZE = 12  # diameter of a macOS traffic light
 LIGHT_STEP = 20  # from one light to the next
 LIGHT_MARGIN = 12  # from the window edge to the first light
+STATUS_ICON_SIZE = 14  # unsaved / saved / reloaded, in front of the title
 
 _LIGHT_COLORS = {CLOSE: tokens.MAC_CLOSE, MINIMIZE: tokens.MAC_MINIMIZE, MAXIMIZE: tokens.MAC_ZOOM}
 
@@ -246,11 +249,26 @@ class TitleBar(QWidget):
 
         self.icon = QLabel(self)
         self.icon.setObjectName("titleIcon")
-        self.title = QLabel(self)
+        # The title with the document's state icon in front, centered together.
+        self.title_area = QWidget(self)
+        self.title_area.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.title_area.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        area = QHBoxLayout(self.title_area)
+        area.setContentsMargins(0, 0, 0, 0)
+        area.setSpacing(6)
+        self.status_icon = QLabel(self.title_area)
+        self.status_icon.setObjectName("titleStatus")
+        self.status_icon.setFixedSize(STATUS_ICON_SIZE, STATUS_ICON_SIZE)
+        self.status_icon.hide()
+        self.status_kind: str | None = None
+        self.title = QLabel(self.title_area)
         self.title.setObjectName("windowTitle")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._full_title = ""
+        area.addStretch(1)
+        area.addWidget(self.status_icon)
+        area.addWidget(self.title)
+        area.addStretch(1)
         self.left_group, self.right_group = build_groups(self, self.button_layout)
         self.buttons = {**self.left_group.buttons, **self.right_group.buttons}
         for kind, button in self.buttons.items():
@@ -274,10 +292,40 @@ class TitleBar(QWidget):
             self.icon.hide()
         # Balance both sides so the title is centered on the window.
         row.addSpacing(max(0, right_width - left_width))
-        row.addWidget(self.title, 1)
+        row.addWidget(self.title_area, 1)
         row.addSpacing(max(0, left_width - right_width))
         row.addWidget(self.right_group)
-        window.windowTitleChanged.connect(self.title.setText)
+        window.windowTitleChanged.connect(self.set_title)
+
+    # Title and document state ----------------------------------------------------------
+
+    def set_title(self, text: str) -> None:
+        self._full_title = text
+        self._elide()
+
+    def set_status(self, kind: str | None, pixmap: QPixmap | None, tooltip: str = "") -> None:
+        """The icon in front of the title: unsaved, saved or reloaded (or none)."""
+        self.status_kind = kind
+        if kind is None or pixmap is None:
+            self.status_icon.hide()
+        else:
+            self.status_icon.setPixmap(pixmap)
+            self.status_icon.show()
+        # The title area ignores the mouse (dragging); the tooltip goes on the bar.
+        self.setToolTip(tooltip)
+        self._elide()
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self) -> None:
+        room = self.title_area.width()
+        if self.status_icon.isVisible():
+            room -= STATUS_ICON_SIZE + 6
+        metrics = self.title.fontMetrics()
+        text = metrics.elidedText(self._full_title, Qt.TextElideMode.ElideMiddle, max(0, room))
+        self.title.setText(text)
 
     # Compatibility with the old fixed layout (tests, callers).
     @property

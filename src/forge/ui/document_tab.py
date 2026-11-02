@@ -58,6 +58,8 @@ class DocumentTab(ForgeEditor):
         # session backup differs from the file on disk, so it is marked here.
         self._forced_dirty = False
         self.close_button: QToolButton | None = None
+        # time.monotonic() of the last reload after a change outside Forge.
+        self.reloaded_at: float | None = None
         # The DocumentPage holding this editor (set by the main window).
         self.page: QWidget | None = None
         # True while a large file is streamed in; the tab is read-only then.

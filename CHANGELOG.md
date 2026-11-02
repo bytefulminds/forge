@@ -24,6 +24,9 @@ this file by `scripts/release_notes.py`, so every release needs a section here.
 
 ### Changed
 
+- The title bar shows the document's state as an icon instead of an asterisk: an amber
+  dot for unsaved changes, a green check when saved, and blue arrows for half a minute
+  after the file was reloaded because another program changed it.
 - The window buttons follow the system: traffic lights on the left on macOS (the green
   one for full screen), minimize, maximize and close on the right on Windows, and the
   desktop's own button layout on Linux (GNOME and other GTK desktops, KDE). Dialogs put

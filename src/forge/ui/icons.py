@@ -6,7 +6,7 @@ from functools import cache
 from importlib import resources
 
 from PyQt6.QtCore import QByteArray, QRectF, Qt
-from PyQt6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
 ICON_SIZE = 16
@@ -29,6 +29,28 @@ def _pixmap(name: str, color: str, size: int) -> QPixmap:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     renderer.render(painter, QRectF(0, 0, pixmap.width(), pixmap.height()))
+    painter.end()
+    pixmap.setDevicePixelRatio(scale)
+    return pixmap
+
+
+@cache
+def status_pixmap(name: str, color: str, size: int) -> QPixmap:
+    """A small state icon: a Lucide icon, or ``"dot"`` for a filled circle."""
+    if name != "dot":
+        return _pixmap(name, color, size)
+    app = QGuiApplication.instance()
+    ratio = app.devicePixelRatio() if isinstance(app, QGuiApplication) else 1.0
+    scale = max(2.0, ratio)
+    pixmap = QPixmap(round(size * scale), round(size * scale))
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    diameter = pixmap.width() * 0.62
+    offset = (pixmap.width() - diameter) / 2
+    painter.drawEllipse(QRectF(offset, offset, diameter, diameter))
     painter.end()
     pixmap.setDevicePixelRatio(scale)
     return pixmap
