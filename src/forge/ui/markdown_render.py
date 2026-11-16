@@ -25,6 +25,9 @@ from mdit_py_plugins.tasklists import tasklists_plugin
 from forge.themes.theme import Theme
 
 MERMAID = "mermaid"
+# Links behind the copy buttons on code blocks: forge-copy:<index>, counted
+# over the code blocks in document order (see code_blocks).
+COPY_SCHEME = "forge-copy"
 
 
 @cache
@@ -52,17 +55,52 @@ def _parser(rich: bool) -> MarkdownIt:
             if rich:
                 return f'<pre class="mermaid">{code}</pre>\n'
             return f'<pre class="mermaid-source"><code>{code}</code></pre>\n'
-        return RendererHTML.fence(renderer, tokens, idx, options, env)
+        return _with_copy(RendererHTML.fence(renderer, tokens, idx, options, env), env, rich)
+
+    def code_block(
+        renderer: RendererHTML,
+        tokens: Sequence[Token],
+        idx: int,
+        options: OptionsDict,
+        env: EnvType,
+    ) -> str:
+        return _with_copy(RendererHTML.code_block(renderer, tokens, idx, options, env), env, rich)
 
     md.add_render_rule("fence", fence)
+    md.add_render_rule("code_block", code_block)
     # Front matter (YAML between --- lines) is metadata, not content.
     md.add_render_rule("front_matter", lambda *_args: "")
     return md
 
 
-def render_body(text: str, rich: bool) -> str:
+def _with_copy(block: str, env: EnvType, rich: bool) -> str:
+    """A code block with a copy button (a forge-copy link the preview handles)."""
+    index = int(env.get("forge_code", 0))
+    env["forge_code"] = index + 1
+    label = html.escape(str(env.get("forge_copy_label", "Copy")))
+    link = f'<a class="copy" href="{COPY_SCHEME}:{index}">{label}</a>'
+    if rich:
+        return f'<div class="code-block">{link}{block}</div>\n'
+    return f'<p class="copy">{link}</p>{block}'
+
+
+def render_body(text: str, rich: bool, copy_label: str = "Copy") -> str:
     """The document as an HTML fragment."""
-    return str(_parser(rich).render(text))
+    return str(_parser(rich).render(text, {"forge_copy_label": copy_label}))
+
+
+def code_blocks(text: str) -> list[str]:
+    """The text of every code block except Mermaid diagrams, in document
+    order: what the copy buttons copy."""
+    blocks = []
+    for token in _parser(False).parse(text):
+        if token.type == "code_block":
+            blocks.append(token.content)
+        elif token.type == "fence":
+            info = token.info.strip().split(maxsplit=1)
+            if not info or info[0].lower() != MERMAID:
+                blocks.append(token.content)
+    return blocks
 
 
 # Basic preview (QTextBrowser) ---------------------------------------------------
@@ -74,9 +112,9 @@ def _checkbox(match: re.Match[str]) -> str:
     return "☑ " if "checked" in match.group(1) else "☐ "
 
 
-def basic_html(text: str, mermaid_hint: str) -> str:
+def basic_html(text: str, mermaid_hint: str, copy_label: str = "Copy") -> str:
     """HTML for Qt's rich text engine, which knows HTML 4 and a little CSS."""
-    body = render_body(text, rich=False)
+    body = render_body(text, rich=False, copy_label=copy_label)
     body = _CHECKBOX.sub(_checkbox, body)
     body = body.replace("<table>", '<table border="1" cellspacing="0" cellpadding="6">')
     if 'class="mermaid-source"' in body:
@@ -103,6 +141,7 @@ def basic_css(theme: Theme, code_font: str) -> str:
     th {{ background-color: {c.elevated_bg}; }}
     hr {{ background-color: {c.border}; }}
     p.hint {{ color: {c.text_muted}; font-size: 12px; margin-bottom: 0; }}
+    p.copy {{ text-align: right; font-size: 12px; margin-top: 8px; margin-bottom: 0; }}
     ul.contains-task-list {{ list-style-type: none; }}
     """
 
@@ -130,6 +169,14 @@ def rich_css(theme: Theme, code_font: str, ui_font: str) -> str:
                         padding: 0.15em 0.35em; border-radius: 5px; }}
     pre {{ background: {c.elevated_bg}; padding: 12px 14px; border-radius: 8px;
            overflow-x: auto; border: 1px solid {c.border}; }}
+    .code-block {{ position: relative; }}
+    .code-block a.copy {{ position: absolute; top: 8px; right: 8px; font-size: 12px;
+        padding: 2px 9px; border-radius: 5px; color: {c.text_muted};
+        background: {c.editor_bg}; border: 1px solid {c.border}; opacity: 0;
+        transition: opacity 0.15s; font-family: inherit; }}
+    .code-block:hover a.copy, .code-block a.copy.done {{ opacity: 1; }}
+    .code-block a.copy:hover {{ color: {c.text}; text-decoration: none;
+        border-color: {c.border_strong}; }}
     blockquote {{ margin: 0 0 1em; padding: 0 1em; color: {c.text_muted};
                   border-left: 3px solid {c.border_strong}; }}
     table {{ border-collapse: collapse; margin: 1em 0; display: block; overflow-x: auto; }}

@@ -57,6 +57,7 @@ def builtin_extensions() -> list[ExtensionInfo]:
         find_in_files,
         json_tool,
         markdown_tool,
+        utilities,
         xml_tool,
         yaml_tool,
     )
@@ -69,6 +70,8 @@ def builtin_extensions() -> list[ExtensionInfo]:
         csv_tool.EXTENSION,
         compare.EXTENSION,
         *devtools.EXTENSIONS,
+        devtools.CRON,  # directly in Tools, at the top of the utility windows
+        utilities.EXTENSION,
         find_in_files.EXTENSION,
     ]
 
@@ -121,8 +124,7 @@ class ExtensionHost:
                 search_menu.addSeparator()
                 target = search_menu
             elif ext.placement == "tools-flat":
-                tools_menu.addSeparator()
-                target = tools_menu
+                target = tools_menu  # its separator comes from separator_before
             else:
                 submenu = tools_menu.addMenu(ext.title())
                 assert submenu is not None

@@ -1,4 +1,4 @@
-"""Compare two documents side by side (like the Notepad++ Compare plugin)."""
+"""Compare two documents, a document and the clipboard, or two pasted texts."""
 
 from __future__ import annotations
 
@@ -21,6 +21,18 @@ EXTENSION = ExtensionInfo(
             "compare.saved",
             lambda: tr("Compare with &Saved Version"),
             f"{_ACTIONS}:compare_with_saved",
+        ),
+        CommandSpec(
+            "compare.clipboard",
+            lambda: tr("Compare with &Clipboard"),
+            f"{_ACTIONS}:compare_with_clipboard",
+        ),
+        CommandSpec(
+            "compare.quick",
+            lambda: tr("&Quick Diff..."),
+            f"{_ACTIONS}:quick_diff",
+            "Ctrl+Alt+Shift+D",
+            separator_before=True,
         ),
     ),
 )

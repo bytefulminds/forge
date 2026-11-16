@@ -57,3 +57,15 @@ def test_styles_use_theme_colors() -> None:
         assert theme.text in basic_css(theme, "Mono")
         assert theme.editor_bg in rich_css(theme, "Mono", "Sans")
         assert mermaid_config(theme)["securityLevel"] == "strict"
+
+
+def test_code_blocks_get_copy_links_in_order() -> None:
+    from forge.ui.markdown_render import code_blocks
+
+    assert code_blocks(DOC) == ["x = 1 < 2\n"]  # the Mermaid diagram is not code to copy
+    body = render_body(DOC, rich=True, copy_label="Kopiëren")
+    assert '<a class="copy" href="forge-copy:0">Kopiëren</a>' in body
+    assert "forge-copy:1" not in body
+    basic = basic_html("```\na\n```\n\n    b\n", "HINT")
+    assert "forge-copy:0" in basic and "forge-copy:1" in basic
+    assert code_blocks("```\na\n```\n\n    b\n") == ["a\n", "b\n"]

@@ -22,11 +22,12 @@ otherwise; the menus always show the right keys for your system.
 13. [Compare](#13-compare)
 14. [Find in Files](#14-find-in-files)
 15. [Developer tools](#15-developer-tools)
-16. [Preferences](#16-preferences)
-17. [Large files](#17-large-files)
-18. [Keyboard shortcuts](#18-keyboard-shortcuts)
-19. [Where Forge keeps its files](#19-where-forge-keeps-its-files)
-20. [About Forge](#20-about-forge)
+16. [Regex Tester, Code Shot and Snipping Tool](#16-regex-tester-code-shot-and-snipping-tool)
+17. [Preferences](#17-preferences)
+18. [Large files](#18-large-files)
+19. [Keyboard shortcuts](#19-keyboard-shortcuts)
+20. [Where Forge keeps its files](#20-where-forge-keeps-its-files)
+21. [About Forge](#21-about-forge)
 
 ---
 
@@ -76,7 +77,7 @@ new version, a bar at the bottom of the window says so:
 - Close the bar with **×** to be reminded the next day.
 
 **Help > Check for Updates** checks right away. Turn the daily check off in Preferences
-(section 16).
+(section 17).
 
 How the new version is installed:
 
@@ -260,7 +261,8 @@ Every document has a toolbar above the text.
   last button (the sliders icon) opens them.
 - **Right:** word wrap, and for Markdown, CSV and JSON the three views:
   - **Text:** only the editor.
-  - **Split:** editor and preview side by side; the preview scrolls along with the editor.
+  - **Split:** editor and preview side by side. They scroll together: scroll either one and
+    the other follows.
   - **Preview:** only the preview.
 
 `Ctrl+Shift+V` switches the preview on and off. Forge remembers the view per document.
@@ -292,6 +294,9 @@ flowchart LR
 
 Without the browser engine, Mermaid blocks show as code with a hint.
 
+Every code block in the preview has a **Copy** button (top right, shown when you point at the
+block) that copies the code without the fences.
+
 For safety, HTML inside a Markdown file is shown as text and never runs. Links open in
 your browser. Images from the internet are not loaded; images next to the file are.
 
@@ -305,8 +310,44 @@ your browser. Images from the internet are not loaded; images next to the file a
 | Quote | Adds or removes `> ` on the selected lines | |
 | Bulleted, Numbered, Task List | Turns lines into a list, switches list type, or removes it | |
 | Code Block | Puts the selected lines between ```` ``` ```` fences, or removes them | |
+| Strikethrough | Wraps the selection in `~~`, or unwraps it | |
+| Image | Pick an image file; inserts `![name](path)` with the path relative to the document | |
+| Footnote | Puts the next free `[^1]` at the cursor and its line at the end of the document, with the cursor there to type the note | |
 | Table | Inserts a table with three columns | |
+| Line Up Table | Pads the cells of the table at the cursor so the columns line up; keeps `:---:` alignment | |
+| Table of Contents | Inserts a list of links to the headings at the cursor, between `<!-- toc -->` markers. Run it again to update the list in place | |
+| Diagram | Opens the diagram editor (see below) | |
 | Horizontal Rule | Inserts `---` | |
+
+### Drawing diagrams
+
+*Diagram* opens a window to draw a [Mermaid](https://mermaid.js.org) flowchart with the mouse.
+With the cursor in a `mermaid` block, it opens that diagram; otherwise it starts with two
+boxes and inserts a new block at the cursor.
+
+- **Add a box:** double-click the canvas, or a shape button. With a box selected, a shape
+  button adds the new box after it, already connected.
+- **Connect:** point at a box and four round connectors appear around it. Drag one onto
+  another box (anywhere on it; the box lights up) to connect them. Drop it on empty
+  canvas instead to add a new box there, connected, ready to type its name.
+- **Next step:** select a box and press `Tab` to add a connected box one step further
+  along the flow; type its name, and `Tab` again for the step after that.
+- **Edit text:** double-click a box or an arrow, or select it and press `Enter`, and type
+  in place. `Enter` keeps the text, `Esc` cancels. The panel on the right also changes
+  the text and the kind (box, decision, database; plain, dotted or thick arrow).
+- **Move and resize:** drag boxes; they snap to the dotted grid. A selected box has
+  handles to make it bigger or smaller. Arrow keys nudge the selection (`Shift` for one
+  pixel). Drag on empty canvas to select several.
+- **Delete** (or `Backspace`) removes the selection; **Tidy Up** lays everything out in
+  layers along the flow; **Direction** sets top to bottom, left to right and so on.
+- **Undo and redo:** `Ctrl+Z` and `Ctrl+Shift+Z` (or the undo button), for every change.
+- The right side shows the Mermaid code as you draw. *Update Diagram* or *Insert Diagram*
+  puts it in the document as one undo step.
+
+Forge stores where you placed the boxes, and the size of boxes you resized, in a
+`%% forge-layout` comment, which Mermaid ignores.
+Flowcharts you wrote by hand open too. Other diagram types (sequence, class, Gantt) and
+subgraphs are edited as text; the preview shows them.
 
 ## 9. JSON
 
@@ -316,10 +357,27 @@ your browser. Images from the internet are not loaded; images next to the file a
 | Minify | Puts everything on one line | |
 | Validate | Checks the document and jumps to the first error | |
 | Tree | Opens the split view with a tree of keys, values and types | |
+| Path Query | Finds values by path and selects every match in the code (see below) | `Ctrl+Alt+Shift+J` |
+| Sort Keys | Sorts the keys of every object, A to Z, at every level; numbers stay exactly as written | |
+| Convert to CSV | Opens an array of objects as CSV in a new tab. Columns are all keys in order of appearance; nested objects become columns such as `address.city`; arrays stay JSON | |
+| Convert to YAML | Opens the data as YAML in a new tab | |
 
-All JSON tools are one undo step. The preview of a JSON document is the tree. Click a key
-or an array item in the tree (or select it and press `Enter`) and Forge selects it in the
-code, so you can find a value in a large document by browsing the tree.
+The tools work on the selection, or on the whole document without one. Format, Minify and
+Sort Keys are one undo step. The preview of a JSON document is the tree. Click a key or an
+array item in the tree (or select it and press `Enter`) and Forge selects it in the code and
+lights up its line for a moment, so you can find a value in a large document by browsing
+the tree.
+
+**Path Query** opens a small window next to the code. Type a path and Forge selects every
+match while you type, lists them with their values, and jumps to one when you click it.
+
+| Path | Finds |
+|---|---|
+| `$.name` or `name` | the key `name` at the top |
+| `$.items[0]`, `$.items[-1]` | the first, the last item |
+| `$.items[*].price` | `price` in every item |
+| `$..id` | every `id` at any depth |
+| `$['first name']` | a key with spaces or dots |
 
 ## 10. CSV
 
@@ -392,10 +450,17 @@ code, so you can find a value in a large document by browsing the tree.
 *Validate YAML* checks the document and jumps to the first error. YAML is also checked while
 you type (see section 6).
 
+*Convert to JSON* opens the data as JSON in a new tab. A file with several documents (`---`)
+becomes an array; dates become text such as `"2026-11-15"`.
+
 ## 13. Compare
 
 - **Compare with Saved Version:** your unsaved changes against the file on disk.
 - **Compare with Tab** (`Ctrl+Alt+C`): the current document against another open tab.
+- **Compare with Clipboard:** the text on the clipboard (left) against the selection, or
+  the whole document (right).
+- **Quick Diff** (`Ctrl+Alt+Shift+D`): paste two texts in a window, old on the left and new
+  on the right, and click *Compare*. Handy for two snippets that are not in a file.
 
 The comparison opens in its own tab with the older version on the left and the newer on
 the right:
@@ -425,9 +490,11 @@ the background and can be cancelled.
 
 ## 15. Developer tools
 
-The Tools menu holds the general tools: Compare (section 13) and a set of everyday developer
-tools, grouped in submenus. The ones that work on text are also in the editor's right-click
-menu, which only offers what fits the document's language and the selected text.
+The Tools menu holds the general tools: Compare (section 13), a set of everyday developer
+tools grouped in submenus, and at the bottom the windows Cron Expression (below), Regex
+Tester, Code Shot and Snipping Tool (section 16).
+The ones that work on text are also in the editor's right-click menu, which only offers what
+fits the document's language and the selected text.
 
 ### Hash
 
@@ -483,7 +550,7 @@ is and the status bar says why.
 
 ### Cron
 
-**Cron Expression** opens one window to write or check a schedule. Everything updates while
+**Cron Expression** (Tools menu, or right-click a selected expression) opens one window to write or check a schedule. Everything updates while
 you type:
 
 - At the top, the expression and what it means in words, for example
@@ -509,7 +576,84 @@ you open the window to have it filled in. The command stays as it is.
 
 Example: `30 7 * * MON-FRI` is *At 07:30, Monday to Friday*.
 
-## 16. Preferences
+## 16. Regex Tester, Code Shot and Snipping Tool
+
+These three are at the bottom of the Tools menu, below Cron Expression.
+
+### Regex Tester
+
+`Ctrl+Alt+R` opens a window to try a regular expression. It uses Python's regular
+expressions, the same as Find in Files.
+
+- **Pattern** at the top, with the flags *i* (ignore case), *m* (`^` and `$` at every
+  line), *s* (`.` matches newlines too) and *x* (spaces and `#` comments in the pattern are
+  ignored). A mistake turns the field red and says where it is.
+- **Test text:** starts with the selection, or the document. Edit it freely; matches are
+  outlined while you type and every group is underlined in its own color.
+- **Matches and groups:** each match with its position, and below it the groups (named
+  groups by name). Click one to select it in the test text.
+- **Replace with:** shows the test text after replacing, with `\1` or `\g<name>` for
+  groups.
+- **Copy as Python** copies the pattern as `re.compile(r"...", re.IGNORECASE)`.
+
+Select a pattern in your code (one line) before opening the window to test that pattern
+against the document.
+
+### Code Shot
+
+Select some code (Code Shot works on a selection only) and choose Tools > Code Shot (`Ctrl+Alt+Shift+C`, also in the right-click
+menu). Forge turns it into a tidy image in the colors of your theme, ready to paste in a
+manual, a chat or an e-mail.
+
+- The common indentation is removed, so a method from deep in a class starts at the left.
+- **Title:** the file name, or your own caption, in the window frame.
+- **Backdrop:** a colored background around the window (Forge blue, Fresh, Sunset,
+  Graphite) or none, which gives a transparent PNG.
+- **Line numbers** (they keep the numbers from the file) and the **window frame** with
+  its three dots can be turned off.
+- **Copy Image** puts it on the clipboard; **Save PNG** saves it. Images are made at twice
+  the screen size, so they stay sharp in documents and on high resolution screens.
+
+### Snipping Tool
+
+Tools > Snipping Tool (`Ctrl+Alt+Shift+S`) takes a screenshot and lets you mark it up.
+
+1. Choose **Area** or **Full screen**, an optional delay (3, 5 or 10 seconds, to open a
+   menu first), and whether Forge hides itself while it takes the picture. Click
+   *New Snip*.
+2. For an area, drag a rectangle. On macOS this is the system's own crosshair, as with
+   `Cmd+Shift+4`: `Space` picks a window instead, `Esc` cancels. On Windows and Linux the
+   screen freezes and dims: drag a rectangle, `Enter` takes the whole screen, `Esc` or a
+   right click cancels.
+3. Annotate: rectangle, ellipse, arrow, line, pen, highlighter and text, in one of the
+   colors or any color you pick (*+*), thin, medium or thick. `Shift` keeps lines
+   straight and shapes square or round.
+4. Change what you drew with **Select** (the pointer): click a shape to select it, drag it
+   to move it, drag a handle to make it bigger or smaller, or drag the ends of a line or
+   arrow. With a shape selected, a color or width changes that shape. Double-click text to
+   edit it; `Delete` removes the selection.
+5. **Crop:** the whole picture shows with a frame. Drag its handles or the frame itself,
+   or drag a new frame, to choose the part to keep. *Apply Crop*, `Enter` or another tool
+   crops; choose Crop again to change it. **Eraser:** click or drag over shapes to remove
+   them. `Ctrl+Z` undoes every step, crops included.
+6. Bottom left, next to the **i**, a tip explains the current tool; point at it to read
+   all of it when it does not fit.
+7. **Copy** puts the result on the clipboard at full resolution; **Save PNG** saves it.
+
+Per system:
+
+- **macOS** asks once for permission: allow Forge under System Settings > Privacy &
+  Security > Screen Recording (on newer versions "Screen & System Audio Recording"), then
+  start Forge again. When you run Forge from source, allow the terminal or IDE that starts
+  it instead. Without permission macOS only gives the desktop background.
+- **Linux on Wayland:** programs may not read the screen themselves, so your desktop shows
+  its own screenshot window; Forge then opens the annotation window with the result.
+  On X11 Forge takes the picture itself.
+- **Windows:** works as is.
+
+The area and full screen modes take the screen under the mouse pointer.
+
+## 17. Preferences
 
 Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes them.
 
@@ -525,7 +669,7 @@ Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes the
 
 The interface language changes after a restart.
 
-## 17. Large files
+## 18. Large files
 
 Forge stays responsive with big files:
 
@@ -534,7 +678,7 @@ Forge stays responsive with big files:
 - Bracket colors and live checks stop above about 2 MB.
 - Previews are not rendered for documents above 20 million characters.
 
-## 18. Keyboard shortcuts
+## 19. Keyboard shortcuts
 
 | Action | Linux and Windows | macOS |
 |---|---|---|
@@ -556,10 +700,15 @@ Forge stays responsive with big files:
 | Format JSON | `Ctrl+Alt+Shift+M` | `Cmd+Option+Shift+M` |
 | XML pretty print, check | `Ctrl+Alt+Shift+B`, `Ctrl+Alt+Shift+K` | `Cmd+Option+Shift+B`, `Cmd+Option+Shift+K` |
 | Markdown bold, italic | `Ctrl+B`, `Ctrl+I` | `Cmd+B`, `Cmd+I` |
+| JSON path query | `Ctrl+Alt+Shift+J` | `Cmd+Option+Shift+J` |
 | Compare with tab | `Ctrl+Alt+C` | `Cmd+Option+C` |
+| Quick diff | `Ctrl+Alt+Shift+D` | `Cmd+Option+Shift+D` |
+| Regex tester | `Ctrl+Alt+R` | `Cmd+Option+R` |
+| Code shot | `Ctrl+Alt+Shift+C` | `Cmd+Option+Shift+C` |
+| Snipping tool | `Ctrl+Alt+Shift+S` | `Cmd+Option+Shift+S` |
 | Preferences | `Ctrl+,` | `Cmd+,` |
 
-## 19. Where Forge keeps its files
+## 20. Where Forge keeps its files
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
@@ -572,7 +721,7 @@ Set `FORGE_HOME=/some/folder` to keep everything in one folder instead.
 If something goes wrong, the log usually says why; please attach it when you report a
 problem.
 
-## 20. About Forge
+## 21. About Forge
 
 Help > Check for Updates looks for a new version right away (see section 1).
 

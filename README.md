@@ -8,7 +8,7 @@
   developer reaches for every day. Open a file, get to work. Tools for JSON, CSV, Markdown,
   XML and YAML are built in, not bolted on.**
 
-**Version 0.2.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
+**Version 0.3.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
 
 [![pipeline](https://gitlab.com/bytefulminds/Forge/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/Forge/-/pipelines)
 ![license: GPL](https://img.shields.io/badge/license-GPL--3.0-5CC8E8)
@@ -28,7 +28,8 @@
 - **Knows your files.** Every document gets a toolbar with the tools for its language:
   formatting, validation, previews and conversions, one click away.
 - **A developer's toolbox built in.** Hashes, Base64 and URL encoding, letter case,
-  UUIDs, timestamps and cron expressions, from the Tools menu or a right click.
+  UUIDs, timestamps and cron expressions, from the Tools menu or a right click. Plus a
+  regex tester, a quick diff, code shots and a snipping tool for screenshots.
 - **Looks the same everywhere.** Forge draws its own window, menus and dialogs, in three
   themes (Forge Dark, Forge Blue and Forge Light), on macOS, Linux and Windows.
 - **Never loses work.** Unsaved text and open tabs come back after a restart, and Forge
@@ -38,17 +39,29 @@
 
 ### Markdown with a live preview
 
-Write on the left, read on the right. Tables, task lists, footnotes and
-[Mermaid](https://mermaid.js.org) diagrams render as you type. The toolbar has buttons for
-bold, headings, lists, links, code blocks and tables.
+Write on the left, read on the right; both sides scroll together. Tables, task lists,
+footnotes and [Mermaid](https://mermaid.js.org) diagrams render as you type, and every code
+block has a copy button. The toolbar has buttons for bold, headings, lists, links, images,
+footnotes, code blocks and tables, lines up a messy table and keeps a table of contents up
+to date.
+
+Draw a flowchart with the mouse: add boxes, drag arrows between them, and Forge writes the
+Mermaid code for you. Flowcharts you wrote by hand open in the same editor.
+
+![Diagram editor with boxes and arrows on the left and the Mermaid code on the right](docs/images/forge-diagram.png)
 
 ### JSON: format, validate, explore
 
 Format or minify with one click. Errors are underlined at the exact spot as you type,
 and the tree view shows the structure of the document: click a key in the tree and Forge
-selects it in the code.
+selects it in the code and lights up its line.
 
 ![JSON document next to its tree view, with the clicked key selected in the code](docs/images/forge-json.png)
+
+Find values with a path such as `$.items[*].name` or `$..id`: Forge selects every match
+while you type. Sort all keys, or turn JSON into CSV or YAML (and YAML back into JSON).
+
+![JSON path query selecting the kind of every sensor in the document](docs/images/forge-json-query.png)
 
 ### CSV that understands your data
 
@@ -76,10 +89,29 @@ run times and a cheat sheet, and puts the result back in your file.
 
 ### Compare two versions
 
-Compare a document with its saved version or with another tab. Added lines are green,
-changed lines orange, removed lines red, and changes within a line are marked too.
+Compare a document with its saved version, another tab or the clipboard, or paste two
+snippets in Quick Diff. Added lines are green, changed lines orange, removed lines red,
+and changes within a line are marked too.
 
 ![Side by side comparison of two versions of a JSON file](docs/images/forge-compare.png)
+
+### Regex tester, code shots and screenshots
+
+Try a regular expression on live text: matches are outlined, every group gets its own
+color, and a replace preview shows the result. Copy the pattern as Python code when it works.
+
+![Regex tester with matches, named groups and a replace preview](docs/images/forge-regex.png)
+
+Select code and make a **code shot**: a tidy image in your theme's colors, with a window
+frame and a colored backdrop, ready to paste in a manual or a chat.
+
+![Code shot window with a Python function on a blue backdrop](docs/images/forge-codeshot.png)
+
+The **snipping tool** captures an area or the whole screen. Mark it up with rectangles,
+arrows, lines, a pen, a highlighter and text in any color, move and resize what you drew,
+crop, and copy it.
+
+![Screenshot with a red frame, an arrow and a note in the annotation window](docs/images/forge-snip.png)
 
 ### Find in Files
 

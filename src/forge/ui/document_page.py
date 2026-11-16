@@ -27,6 +27,11 @@ REFRESH_DELAY_MS = 350
 ToolProvider = Callable[[DocumentTab], list[ToolItem]]
 
 
+CONTENT_TOP_GAP = 5
+# After this long without scrolling, either side may lead again.
+SCROLL_LEAD_MS = 250
+
+
 class DocumentPage(QWidget):
     def __init__(
         self,
@@ -37,6 +42,7 @@ class DocumentPage(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("documentPage")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.editor = editor
         self._theme = theme
         self.mode = TEXT
@@ -52,6 +58,8 @@ class DocumentPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.toolbar)
+        # A little air between the toolbar and the text (in the editor color).
+        layout.addSpacing(CONTENT_TOP_GAP)
         layout.addWidget(self.splitter, 1)
         self.refresh_toolbar()
 
@@ -63,6 +71,13 @@ class DocumentPage(QWidget):
         vertical = editor.verticalScrollBar()
         if vertical is not None:
             vertical.valueChanged.connect(self._sync_scroll)
+        # Scrolling is linked both ways. Whichever side the user scrolls leads;
+        # the other follows without echoing back until things are quiet again.
+        self._scroll_leader: str | None = None
+        self._leader_timer = QTimer(self)
+        self._leader_timer.setSingleShot(True)
+        self._leader_timer.setInterval(SCROLL_LEAD_MS)
+        self._leader_timer.timeout.connect(self._release_scroll)
 
     @property
     def supports_preview(self) -> bool:
@@ -111,6 +126,7 @@ class DocumentPage(QWidget):
         self._preview_language = self.editor.language.id
         if self.preview is not None:
             self.splitter.addWidget(self.preview)
+            self.preview.scrolled.connect(self._preview_scrolled)
             tree = getattr(self.preview, "tree", None)
             if isinstance(tree, JsonTree):
                 tree.path_clicked.connect(self.reveal_json_path)
@@ -130,6 +146,7 @@ class DocumentPage(QWidget):
         editor.SendScintilla(editor.SCI_ENSUREVISIBLEENFORCEPOLICY, line)
         editor.SendScintilla(editor.SCI_SETSEL, anchor, caret)
         editor.SendScintilla(editor.SCI_VERTICALCENTRECARET)
+        editor.flash_lines([line])
 
     def apply_theme(self, theme: Theme) -> None:
         self._theme = theme
@@ -156,12 +173,30 @@ class DocumentPage(QWidget):
             self.preview.csv_header = self.editor.csv_header
         self.preview.show_document(str(self.editor.text()), self.editor.doc.path)
 
+    def _lead(self, side: str) -> bool:
+        """True when ``side`` may drive the other one now."""
+        if self._scroll_leader not in (None, side):
+            return False
+        self._scroll_leader = side
+        self._leader_timer.start()
+        return True
+
+    def _release_scroll(self) -> None:
+        self._scroll_leader = None
+
     def _sync_scroll(self, value: int) -> None:
-        if self.mode != SPLIT or self.preview is None:
+        if self.mode != SPLIT or self.preview is None or not self._lead("editor"):
             return
         bar = self.editor.verticalScrollBar()
         maximum = bar.maximum() if bar is not None else 0
         self.preview.scroll_to_ratio(value / maximum if maximum else 0.0)
+
+    def _preview_scrolled(self, ratio: float) -> None:
+        if self.mode != SPLIT or not self._lead("preview"):
+            return
+        bar = self.editor.verticalScrollBar()
+        if bar is not None:
+            bar.setValue(round(bar.maximum() * ratio))
 
 
 def _token_length(text: str, offset: int) -> int:

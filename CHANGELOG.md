@@ -4,6 +4,43 @@ All notable changes to Forge. The newest version is at the top. Versions follow
 [semantic versioning](https://semver.org). The release notes on GitLab are taken from
 this file by `scripts/release_notes.py`, so every release needs a section here.
 
+## [0.3.0] - 2026-11-16
+
+### Added
+
+- Regex Tester (Tools menu, `Ctrl+Alt+R`): live matches and colored groups on your own
+  text, a list of matches and groups, a replace preview and Copy as Python.
+- Code Shot (`Ctrl+Alt+Shift+C`, also in the right-click menu): the selected code as a tidy
+  image in the theme's colors, with a window frame, title and backdrop. Copy it or save it
+  as PNG.
+- Snipping Tool (`Ctrl+Alt+Shift+S`): capture an area or the whole screen, with an
+  optional delay, then annotate with rectangles, ellipses, arrows, lines, pen, highlighter
+  and text in any color. Select shapes to move, resize or recolor them, crop the picture,
+  erase shapes, undo every step, and copy the result. Areas use the system crosshair on
+  macOS and the desktop's screenshot portal on Wayland.
+- Compare with Clipboard, and Quick Diff (`Ctrl+Alt+Shift+D`) to compare two pasted texts.
+- Markdown: a diagram editor to draw Mermaid flowcharts with the mouse (and edit
+  existing ones): drag a connector onto a box or onto empty canvas, resize boxes,
+  edit labels in place, Tab for the next step, snap to grid, undo and redo, plus Strikethrough, Image, Footnote, Line Up Table and Table of
+  Contents (insert or update).
+- Markdown preview: a Copy button on every code block.
+- JSON: Path Query (`Ctrl+Alt+Shift+J`) selects every match of a path such as
+  `$.items[*].name` or `$..id`; Sort Keys; Convert to CSV and Convert to YAML.
+- YAML: Convert to JSON.
+
+### Changed
+
+- Markdown split view: the editor and preview scroll together both ways.
+- Clicking in the JSON tree lights up the line in the code for a moment, next to the
+  selection.
+- The line under the tabs runs the full width on every platform, the document toolbar has its own shade
+  between the tabs and the text, and the text starts a little lower.
+
+### Fixed
+
+- Several selections at once (multi cursor) could crash Forge when the status bar counted
+  the selected characters.
+
 ## [0.2.0] - 2026-11-02
 
 Forge now keeps itself up to date. Version 0.1.0 has no updater yet, so download this

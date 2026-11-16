@@ -81,7 +81,11 @@ class Updater(QObject):
         if not (settings.check_automatically and updates.automatic_checks_allowed()):
             return
         if updates.check_due(settings.last_check):
-            QTimer.singleShot(AUTOMATIC_DELAY_MS, lambda: self.check(manual=False))
+            # Owned by this object, so the timer dies with the window.
+            self._timer = QTimer(self)
+            self._timer.setSingleShot(True)
+            self._timer.timeout.connect(lambda: self.check(manual=False))
+            self._timer.start(AUTOMATIC_DELAY_MS)
 
     def check(self, manual: bool) -> None:
         """Ask GitLab for the latest release. ``manual`` (Help > Check for Updates)

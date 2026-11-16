@@ -152,7 +152,11 @@ def test_tools_menu_holds_only_general_tools(qtbot: QtBot) -> None:
     bar = window.menuWidget().findChild(type(window.menuBar()))  # the Forge menu bar
     tools = next(a.menu() for a in bar.actions() if a.text() == "T&ools")
     titles = [a.text() for a in tools.actions() if a.text()]
-    assert "Co&mpare" in titles and "&Hash" in titles and "C&ron" in titles
+    assert "Co&mpare" in titles and "&Hash" in titles
+    # The windows sit directly in the menu, Cron first.
+    windows = ["C&ron Expression...", "Rege&x Tester...", "&Code Shot...", "&Snipping Tool..."]
+    start = titles.index(windows[0])
+    assert titles[start : start + 4] == windows
     for language in ("&JSON", "&YAML", "&XML Tools", "Mar&kdown", "&CSV"):
         assert language not in titles
     # Language commands keep their shortcuts through the window.

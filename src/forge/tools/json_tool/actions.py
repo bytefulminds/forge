@@ -86,3 +86,74 @@ def show_tree(api: ForgeAPI) -> None:
     if editor.language_id != "json":
         editor.set_language("json")
     api.set_document_view(editor, "split")
+
+
+# Conversions ------------------------------------------------------------------
+
+
+def _invalid(api: ForgeAPI, editor: EditorHandle, text: str, in_selection: bool) -> bool:
+    """Report invalid JSON at its position; True when the text is not JSON."""
+    try:
+        validate(text)
+    except JsonError as error:
+        _report(api, editor, error, in_selection)
+        return True
+    return False
+
+
+def sort_keys(api: ForgeAPI) -> None:
+    from forge.tools.json_tool.convert import sorted_json
+
+    source = _source(api)
+    if source is None:
+        return
+    editor, text, in_selection = source
+    if _invalid(api, editor, text, in_selection):
+        return
+    eol = "\r\n" if "\r\n" in text else "\n"
+    result = sorted_json(text, editor.indent_unit(), eol)
+    if in_selection:
+        editor.replace_selection(result)
+    else:
+        if text.endswith(("\n", "\r")):
+            result += eol
+        editor.set_text(result)
+    api.status(tr("Keys sorted."))
+
+
+def to_csv(api: ForgeAPI) -> None:
+    from forge.tools.json_tool.convert import ConvertError
+    from forge.tools.json_tool.convert import to_csv as convert
+
+    source = _source(api)
+    if source is None:
+        return
+    editor, text, in_selection = source
+    if _invalid(api, editor, text, in_selection):
+        return
+    try:
+        result = convert(text)
+    except ConvertError:
+        api.notify(tr("CSV needs a JSON array (of objects) or an object."), "warning")
+        return
+    api.new_document(result, "csv")
+
+
+def to_yaml(api: ForgeAPI) -> None:
+    from forge.tools.json_tool.convert import to_yaml as convert
+
+    source = _source(api)
+    if source is None:
+        return
+    editor, text, in_selection = source
+    if _invalid(api, editor, text, in_selection):
+        return
+    api.new_document(convert(text, max(2, len(editor.indent_unit().expandtabs(4)))), "yaml")
+
+
+def path_query(api: ForgeAPI) -> None:
+    from forge.tools.json_tool.query_dialog import open_query
+
+    editor = api.active_editor()
+    if editor is not None:
+        open_query(api, editor)

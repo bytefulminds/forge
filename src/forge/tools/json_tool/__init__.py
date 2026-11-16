@@ -1,4 +1,4 @@
-"""JSON tools: format, minify, validate and a tree view (like JSTool / JSON Viewer)."""
+"""JSON tools: format, minify, validate, a tree view, path queries and conversions."""
 
 from __future__ import annotations
 
@@ -42,6 +42,40 @@ EXTENSION = ExtensionInfo(
             separator_before=True,
             languages=_JSON,
             icon="list-tree",
+        ),
+        CommandSpec(
+            "json.query",
+            lambda: tr("&Path Query..."),
+            f"{_ACTIONS}:path_query",
+            "Ctrl+Alt+Shift+J",
+            languages=_JSON,
+            icon="text-search",
+            tooltip=lambda: tr("Find values by path, like $.items[*].name"),
+        ),
+        CommandSpec(
+            "json.sort_keys",
+            lambda: tr("&Sort Keys"),
+            f"{_ACTIONS}:sort_keys",
+            separator_before=True,
+            languages=_JSON,
+            icon="arrow-down-a-z",
+            tooltip=lambda: tr("Sort the keys of every object (A to Z)"),
+        ),
+        CommandSpec(
+            "json.to_csv",
+            lambda: tr("Convert to &CSV"),
+            f"{_ACTIONS}:to_csv",
+            languages=_JSON,
+            icon="file-spreadsheet",
+            tooltip=lambda: tr("Open an array of objects as CSV in a new tab"),
+        ),
+        CommandSpec(
+            "json.to_yaml",
+            lambda: tr("Convert to &YAML"),
+            f"{_ACTIONS}:to_yaml",
+            languages=_JSON,
+            icon="file-code",
+            tooltip=lambda: tr("Open the data as YAML in a new tab"),
         ),
     ),
 )
