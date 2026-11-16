@@ -45,3 +45,33 @@ def validate_yaml(api: ForgeAPI) -> None:
         )
         return
     api.notify(tr("Valid YAML ({count} documents).", count=documents), "info")
+
+
+def to_json(api: ForgeAPI) -> None:
+    """Open the YAML (selection or document) as JSON in a new tab."""
+    from forge.tools.json_tool.convert import yaml_to_json
+
+    editor = api.active_editor()
+    if editor is None:
+        return
+    in_selection = editor.has_selection()
+    text = editor.selected_text() if in_selection else editor.text()
+    result = check(text)
+    assert result is not None
+    _documents, error, line, column = result
+    if error:
+        if in_selection:
+            line += editor.selection_start_line() - 1
+        api.show_error_at(
+            editor,
+            tr(
+                "Invalid YAML at line {line}, column {column}: {error}",
+                line=line,
+                column=column,
+                error=error,
+            ),
+            line,
+            column,
+        )
+        return
+    api.new_document(yaml_to_json(text, editor.indent_unit(), editor.eol), "json")

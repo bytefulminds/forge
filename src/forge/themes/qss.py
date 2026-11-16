@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from forge.themes.theme import Theme
+from forge.themes.tokens import mix
 
 
 def build_stylesheet(theme: Theme, arrows: dict[str, str] | None = None) -> str:
@@ -13,6 +14,8 @@ def build_stylesheet(theme: Theme, arrows: dict[str, str] | None = None) -> str:
     controls are styled.
     """
     c = theme
+    # Between the tab bar and the text, so the toolbar reads as its own strip.
+    toolbar_bg = mix(c.chrome_bg, c.editor_bg, 0.5)
     up = (arrows or {}).get("up", "")
     down = (arrows or {}).get("down", "")
     return f"""
@@ -58,13 +61,16 @@ QWidget#languagePicker QListView::item:selected {{
 }}
 
 QTabWidget::pane {{ border: 0; top: 0; }}
+/* The line under the tabs: on the page area, so it runs the full width whatever
+   the tab bar and its corner widget measure on each platform. */
+QTabWidget > QStackedWidget {{ border: 0; border-top: 1px solid {c.border}; }}
 QToolButton#newTabButton {{
     border: none; border-radius: 6px; background: transparent; color: {c.text_muted};
     font-size: 17px; padding: 0 0 2px 0;
 }}
 QToolButton#newTabButton:hover {{ background: {c.hover_bg}; color: {c.text}; }}
 QToolButton#newTabButton:pressed {{ background: {c.pressed_bg}; }}
-QTabBar {{ background: {c.chrome_bg}; qproperty-drawBase: 0; border-bottom: 1px solid {c.border}; }}
+QTabBar {{ background: {c.chrome_bg}; qproperty-drawBase: 0; }}
 QTabBar::tab {{
     height: 32px; min-width: 72px; max-width: 220px; padding: 0 0 0 14px;
     margin: 4px 2px 0 0; border-top-left-radius: 6px; border-top-right-radius: 6px;
@@ -136,8 +142,9 @@ QSplitter::handle {{ background: {c.border}; width: 1px; }}
 
 QWidget#tabCorner {{ background: {c.chrome_bg}; }}
 QWidget#documentToolbar {{
-    background: {c.editor_bg}; border-bottom: 1px solid {c.border};
+    background: {toolbar_bg}; border-bottom: 1px solid {c.border};
 }}
+QWidget#documentPage {{ background: {c.editor_bg}; }}
 QToolButton#docToolButton {{
     background: transparent; border: none; border-radius: 5px;
     padding: 3px; min-width: 18px; min-height: 18px;
@@ -245,6 +252,21 @@ QLabel#cronFieldMeaning {{ color: {c.text}; font-size: 12px; }}
 QFrame#cronField[invalid="true"] QLabel#cronFieldMeaning {{ color: {c.error}; }}
 QTreeWidget#cronRuns, QTreeWidget#cronCheatSheet {{ background: {c.editor_bg}; }}
 QLabel#resultNote {{ color: {c.text_muted}; }}
+QLabel#toolError {{ color: {c.error}; }}
+QLineEdit#monoField {{ font-family: "JetBrains Mono"; font-size: 13px; padding: 5px 8px; }}
+QLineEdit#monoField[invalid="true"] {{ border-color: {c.error}; }}
+QLabel#paneTitle {{ color: {c.text_muted}; font-size: 12px; font-weight: 600; }}
+QTreeWidget#regexMatches {{ background: {c.editor_bg}; }}
+QFrame#toolPane {{ border: 1px solid {c.border}; border-radius: 6px; }}
+QToolButton#colorSwatch {{ border: 2px solid {c.border}; border-radius: 11px; }}
+QToolButton#colorSwatch:checked {{ border: 2px solid {c.text}; }}
+QGraphicsView#annotateCanvas {{ background: {c.chrome_bg}; border: none; }}
+QToolButton#snipMode {{
+    border: 1px solid {c.border_strong}; border-radius: 8px; padding: 8px;
+    background: transparent; color: {c.text};
+}}
+QToolButton#snipMode:hover {{ background: {c.hover_bg}; }}
+QToolButton#snipMode:checked {{ border-color: {c.accent}; background: {c.menu_selected_bg}; }}
 QPushButton {{
     background: transparent; color: {c.text}; border: 1px solid {c.border_strong};
     border-radius: 6px; padding: 6px 16px; min-height: 18px; font-weight: 500;

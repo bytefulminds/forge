@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.Qsci import QsciScintilla
+from PyQt6.QtGui import QGuiApplication, QIcon, QImage
 from PyQt6.QtWidgets import QWidget
 
 from forge.core.tasks import run_in_background
@@ -220,6 +221,37 @@ class EditorHandle:
         self.go_to(line, column)
         self._tab.setSelection(line - 1, column - 1, line - 1, column - 1 + length)
 
+    def position(self, offset: int) -> tuple[int, int]:
+        """0-based line and Scintilla (byte) position of character ``offset``."""
+        text = self.text()
+        line = text.count("\n", 0, offset)
+        column = offset - (text.rfind("\n", 0, offset) + 1)
+        start = int(self._tab.SendScintilla(_Q.SCI_POSITIONFROMLINE, line))
+        return line, int(self._tab.SendScintilla(_Q.SCI_POSITIONRELATIVE, start, column))
+
+    def select_ranges(self, ranges: list[tuple[int, int]], flash: bool = True) -> None:
+        """Select every (start, end) character range (multi selection), show the
+        first one and light up its lines for a moment."""
+        if not ranges:
+            return
+        tab = self._tab
+        lines: list[int] = []
+        for number, (start, end) in enumerate(ranges):
+            line, anchor = self.position(start)
+            _line, caret = self.position(end)
+            lines.append(line)
+            if number == 0:
+                tab.SendScintilla(_Q.SCI_SETSEL, anchor, caret)
+            else:
+                tab.SendScintilla(_Q.SCI_ADDSELECTION, caret, anchor)
+        tab.SendScintilla(_Q.SCI_SETMAINSELECTION, 0)
+        tab.SendScintilla(_Q.SCI_ENSUREVISIBLEENFORCEPOLICY, lines[0])
+        tab.SendScintilla(
+            _Q.SCI_SCROLLRANGE, self.position(ranges[0][0])[1], self.position(ranges[0][1])[1]
+        )
+        if flash and hasattr(tab, "flash_lines"):
+            tab.flash_lines(sorted(set(lines)))
+
     def indent_unit(self) -> str:
         if self._tab.indentationsUseTabs():
             return "\t"
@@ -330,6 +362,38 @@ class ForgeAPI:
 
         answer = message_box.question(self.window, title, text)
         return answer == message_box.Button.Yes
+
+    def inform(self, title: str, text: str) -> None:
+        """A short message with an OK button, in Forge's dialog style."""
+        from forge.ui import message_box
+
+        message_box.information(self.window, title, text)
+
+    def icon(self, name: str) -> QIcon:
+        """A bundled Lucide icon in the theme's colors (normal, hover, disabled)."""
+        from forge.ui.icons import themed_icon
+
+        t = self.theme
+        return themed_icon(name, t.text_muted, t.text, t.text_disabled)
+
+    def choose_save_file(self, title: str, name: str, filters: list[str]) -> Path | None:
+        """A file to save to (None when cancelled), in Forge's dialog style."""
+        from forge.ui.file_dialogs import get_save_file
+
+        file, _selected = get_save_file(
+            self.window, title, str(self.dialog_dir() / name), filters, filters[0]
+        )
+        return Path(file) if file else None
+
+    def clipboard_text(self) -> str:
+        clipboard = QGuiApplication.clipboard()
+        return clipboard.text() if clipboard is not None else ""
+
+    def copy_image(self, image: QImage) -> None:
+        """Put an image on the clipboard (to paste in a chat, document or mail)."""
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setImage(image)
 
     def choose_folder(self, title: str, start: str) -> str:
         """A folder picked by the user ("" when cancelled), in Forge's dialog style."""

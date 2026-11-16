@@ -170,11 +170,13 @@ DATETIME = ExtensionInfo(
 
 CRON = ExtensionInfo(
     id="forge.cron",
-    title=lambda: tr("C&ron"),
+    title=lambda: tr("C&ron"),  # the right-click submenu
+    placement="tools-flat",
+    separator_before=True,
     commands=(
         _cmd(
             "cron.explain",
-            lambda: tr("&Cron Expression..."),
+            lambda: tr("C&ron Expression..."),
             "explain_cron",
             when=detect.is_cron,
         ),
@@ -182,4 +184,4 @@ CRON = ExtensionInfo(
     defaults={"clock24": True, "utc": False},
 )
 
-EXTENSIONS = (HASH, ENCODE, TEXT, GENERATE, DATETIME, CRON)
+EXTENSIONS = (HASH, ENCODE, TEXT, GENERATE, DATETIME)  # CRON is listed on its own

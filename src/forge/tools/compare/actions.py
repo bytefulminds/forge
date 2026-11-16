@@ -12,7 +12,7 @@ from forge.themes.theme import Theme
 from forge.tools.compare.view import CompareView
 
 
-def _show(
+def show_comparison(
     api: ForgeAPI, left: str, right: str, left_title: str, right_title: str, tab_title: str
 ) -> None:
     view = CompareView(api, left, right, left_title, right_title)
@@ -40,7 +40,7 @@ def compare_with_saved(api: ForgeAPI) -> None:
     except OSError as exc:
         api.status(tr("Could not read {name}: {error}", name=editor.title, error=str(exc)))
         return
-    _show(
+    show_comparison(
         api,
         saved,
         editor.text(),
@@ -69,7 +69,7 @@ def compare_with_tab(api: ForgeAPI) -> None:
         other = others[titles.index(choice)]
     # The other tab is the "old" side, the current tab the "new" side: lines
     # you added in this tab show green on the right. Swap Sides turns it around.
-    _show(
+    show_comparison(
         api,
         other.text(),
         editor.text(),
@@ -77,3 +77,29 @@ def compare_with_tab(api: ForgeAPI) -> None:
         editor.title,
         f"{other.title} \u2194 {editor.title}",
     )
+
+
+def compare_with_clipboard(api: ForgeAPI) -> None:
+    """The clipboard is the old side, the selection (or document) the new side."""
+    editor = api.active_editor()
+    if editor is None:
+        return
+    clipboard = api.clipboard_text()
+    if not clipboard:
+        api.status(tr("The clipboard has no text to compare with."))
+        return
+    text = editor.selected_text() if editor.has_selection() else editor.text()
+    show_comparison(
+        api,
+        clipboard,
+        text,
+        tr("Clipboard"),
+        editor.title,
+        tr("Clipboard ↔ {name}", name=editor.title),
+    )
+
+
+def quick_diff(api: ForgeAPI) -> None:
+    from forge.tools.compare.quick import open_quick_diff
+
+    open_quick_diff(api)

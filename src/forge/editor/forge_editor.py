@@ -31,6 +31,11 @@ _LINE_NUMBER_MARGIN = 0
 _FOLD_MARGIN = 2
 DECORATION_DELAY_MS = 250
 _FOLD_MARGIN_WIDTH = 14
+# Markers that light up a line for a moment (jump from the JSON tree, path query).
+# 20 to 23 belong to the compare view.
+FLASH_LINE_MARKER = 17
+FLASH_NUMBER_MARKER = 18
+FLASH_MS = 1800
 _Q = QsciScintilla
 # Arrow fold markers instead of the dated boxed tree.
 _FOLD_MARKER_SHAPES = {
@@ -86,6 +91,9 @@ class ForgeEditor(QsciScintilla):
         self.SendScintilla(_Q.SCI_SETFOLDFLAGS, _Q.SC_FOLDFLAG_LINEAFTER_CONTRACTED)
         self.setMarginWidth(_FOLD_MARGIN, _FOLD_MARGIN_WIDTH)
         self.setMarginType(_LINE_NUMBER_MARGIN, QsciScintilla.MarginType.NumberMargin)
+        self.SendScintilla(_Q.SCI_MARKERDEFINE, FLASH_LINE_MARKER, _Q.SC_MARK_BACKGROUND)
+        self.SendScintilla(_Q.SCI_MARKERDEFINE, FLASH_NUMBER_MARKER, _Q.SC_MARK_LEFTRECT)
+        self.SendScintilla(_Q.SCI_SETMARGINMASKN, _LINE_NUMBER_MARGIN, 1 << FLASH_NUMBER_MARKER)
         self.setMarginWidth(1, 0)
         self.SendScintilla(_Q.SCI_SETMARGINLEFT, 0, 8)
         # Roughly 1.5 line height for the code font.
@@ -116,6 +124,10 @@ class ForgeEditor(QsciScintilla):
         self._decor_timer.timeout.connect(self.refresh_decorations)
         self.textChanged.connect(self.schedule_decorations)
         self._brackets: list[tuple[int, int]] = []
+        self._flash_timer = QTimer(self)
+        self._flash_timer.setSingleShot(True)
+        self._flash_timer.setInterval(FLASH_MS)
+        self._flash_timer.timeout.connect(self.clear_flash)
         self._paint_timer = QTimer(self)
         self._paint_timer.setSingleShot(True)
         self._paint_timer.setInterval(40)
@@ -176,6 +188,11 @@ class ForgeEditor(QsciScintilla):
             self.SendScintilla(_Q.SCI_MARKERSETFORE, marker, QColor(theme.margin_text))
             self.SendScintilla(_Q.SCI_MARKERSETBACK, marker, QColor(theme.margin_text))
         self.setCaretForegroundColor(QColor(theme.caret))
+        self.SendScintilla(_Q.SCI_MARKERSETBACK, FLASH_LINE_MARKER, QColor(theme.accent))
+        self.SendScintilla(_Q.SCI_MARKERSETALPHA, FLASH_LINE_MARKER, 60)
+        self.SendScintilla(_Q.SCI_MARKERSETBACK, FLASH_NUMBER_MARKER, QColor(theme.accent))
+        self.SendScintilla(_Q.SCI_MARKERSETFORE, FLASH_NUMBER_MARKER, QColor(theme.accent))
+        self.SendScintilla(_Q.SCI_MARKERSETALPHA, FLASH_NUMBER_MARKER, 255)
         self.setCaretLineBackgroundColor(QColor(theme.caret_line))
         self.setSelectionBackgroundColor(QColor(theme.selection))
         self.resetSelectionForegroundColor()
@@ -191,6 +208,48 @@ class ForgeEditor(QsciScintilla):
         self._update_line_number_width()
         decorations.setup_indicators(self, theme)
         self.schedule_decorations()
+
+    # Selection ---------------------------------------------------------
+
+    def selectedText(self) -> str:
+        """Text of the main selection.
+
+        QScintilla's own version sizes its buffer for the main selection but
+        Scintilla copies every selection into it, which corrupts the heap as
+        soon as there are several selections (multi cursor, path query).
+        """
+        main = int(self.SendScintilla(_Q.SCI_GETMAINSELECTION))
+        start = int(self.SendScintilla(_Q.SCI_GETSELECTIONNSTART, main))
+        end = int(self.SendScintilla(_Q.SCI_GETSELECTIONNEND, main))
+        if end <= start:
+            return ""
+        return str(self.text(start, end))
+
+    def selection_count(self) -> int:
+        return int(self.SendScintilla(_Q.SCI_GETSELECTIONS))
+
+    # Line flash ----------------------------------------------------------
+
+    def flash_lines(self, lines: list[int]) -> None:
+        """Light up ``lines`` (0-based) and their numbers for a moment."""
+        self.clear_flash()
+        for line in lines:
+            self.SendScintilla(_Q.SCI_MARKERADD, line, FLASH_LINE_MARKER)
+            self.SendScintilla(_Q.SCI_MARKERADD, line, FLASH_NUMBER_MARKER)
+        self._flash_timer.start()
+
+    def flashed_lines(self) -> list[int]:
+        lines: list[int] = []
+        line = int(self.SendScintilla(_Q.SCI_MARKERNEXT, 0, 1 << FLASH_LINE_MARKER))
+        while line >= 0:
+            lines.append(line)
+            line = int(self.SendScintilla(_Q.SCI_MARKERNEXT, line + 1, 1 << FLASH_LINE_MARKER))
+        return lines
+
+    def clear_flash(self) -> None:
+        self._flash_timer.stop()
+        self.SendScintilla(_Q.SCI_MARKERDELETEALL, FLASH_LINE_MARKER)
+        self.SendScintilla(_Q.SCI_MARKERDELETEALL, FLASH_NUMBER_MARKER)
 
     # Autocomplete --------------------------------------------------------
 

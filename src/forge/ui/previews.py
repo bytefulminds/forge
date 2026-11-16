@@ -8,20 +8,22 @@ import logging
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
+from PyQt6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QCursor, QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QLabel,
     QStackedWidget,
     QTableView,
     QTextBrowser,
+    QToolTip,
     QWidget,
 )
 
 from forge.core.csvtext import detect_delimiter, read_rows
 from forge.i18n.translator import tr
 from forge.themes.theme import Theme
-from forge.ui.markdown_render import basic_css, basic_html
+from forge.ui.markdown_render import COPY_SCHEME, basic_css, basic_html, code_blocks
 from forge.widgets.json_tree import JsonTree
 
 log = logging.getLogger(__name__)
@@ -34,6 +36,10 @@ PREVIEW_LANGUAGES = ("markdown", "csv", "json")
 
 class Preview(QStackedWidget):
     """A rendered view plus a message page for errors."""
+
+    # The user scrolled the preview: position from 0.0 (top) to 1.0 (bottom),
+    # so the editor can follow (split view).
+    scrolled = pyqtSignal(float)
 
     # CSV: set by the document page from the editor (chosen or detected).
     delimiter: str | None = None
@@ -67,18 +73,52 @@ class Preview(QStackedWidget):
         """Keep the preview roughly in step with the editor (split view)."""
 
 
+def copy_code_block(text: str, index: int) -> bool:
+    """Put code block ``index`` of the Markdown ``text`` on the clipboard."""
+    blocks = code_blocks(text)
+    if not 0 <= index < len(blocks):
+        return False
+    clipboard = QGuiApplication.clipboard()
+    if clipboard is None:
+        return False
+    clipboard.setText(blocks[index])
+    QToolTip.showText(QCursor.pos(), tr("Copied"))
+    return True
+
+
 class MarkdownPreview(Preview):
     """Basic Markdown preview with Qt's rich text engine (always available)."""
 
     def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
         self.browser = QTextBrowser()
         self.browser.setObjectName("markdownPreview")
-        self.browser.setOpenExternalLinks(True)
+        # Links are handled here: copy buttons, anchors, and web links.
+        self.browser.setOpenLinks(False)
+        self.browser.anchorClicked.connect(self._link_clicked)
+        self._text = ""
         document = self.browser.document()
         if document is not None:
             document.setDocumentMargin(24)
         super().__init__(self.browser, parent)
+        self._applying_scroll = False
+        bar = self.browser.verticalScrollBar()
+        if bar is not None:
+            bar.valueChanged.connect(self._user_scrolled)
         self.apply_theme(theme)
+
+    def _user_scrolled(self, value: int) -> None:
+        bar = self.browser.verticalScrollBar()
+        if self._applying_scroll or bar is None or bar.maximum() <= 0:
+            return
+        self.scrolled.emit(value / bar.maximum())
+
+    def _link_clicked(self, url: QUrl) -> None:
+        if url.scheme() == COPY_SCHEME:
+            copy_code_block(self._text, int(url.path() or -1))
+        elif url.scheme() in ("", "file") and url.hasFragment() and not url.path():
+            self.browser.scrollToAnchor(url.fragment())
+        else:
+            QDesktopServices.openUrl(url)
 
     def apply_theme(self, theme: Theme) -> None:
         document = self.browser.document()
@@ -90,17 +130,22 @@ class MarkdownPreview(Preview):
         position = bar.value() if bar is not None else 0
         if path is not None:
             self.browser.setSearchPaths([str(path.parent)])
+        self._text = text
+        self._applying_scroll = True
         self.browser.setHtml(
-            basic_html(text, tr("Install the web extra to draw Mermaid diagrams."))
+            basic_html(text, tr("Install the web extra to draw Mermaid diagrams."), tr("Copy"))
         )
         if bar is not None:
             bar.setValue(position)
+        self._applying_scroll = False
         self.show_view()
 
     def scroll_to_ratio(self, ratio: float) -> None:
         bar = self.browser.verticalScrollBar()
         if bar is not None:
+            self._applying_scroll = True
             bar.setValue(int(bar.maximum() * ratio))
+            self._applying_scroll = False
 
 
 class CsvModel(QAbstractTableModel):

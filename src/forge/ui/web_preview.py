@@ -11,15 +11,16 @@ import json
 from importlib import resources
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QPointF, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import QWidget
 
+from forge.i18n.translator import tr
 from forge.themes.theme import Theme
-from forge.ui.markdown_render import mermaid_config, render_body, rich_css
-from forge.ui.previews import Preview
+from forge.ui.markdown_render import COPY_SCHEME, mermaid_config, render_body, rich_css
+from forge.ui.previews import Preview, copy_code_block
 
 _SCRIPT = """
 const cache = new Map();
@@ -68,15 +69,31 @@ async function forgeRender(html) {
   busy = false;
 }
 
+function forgeRatio() {
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  return max > 0 ? window.scrollY / max : 0;
+}
+
 function forgeScroll(ratio) {
   const max = document.documentElement.scrollHeight - window.innerHeight;
   window.scrollTo(0, Math.max(0, max) * ratio);
 }
 
+let copies = 0;
 document.addEventListener('click', event => {
   const link = event.target.closest('a');
   if (!link) return;
   const href = link.getAttribute('href') || '';
+  if (href.startsWith('forge-copy:')) {
+    // Forge copies the block (it knows the text); the title tells it which.
+    event.preventDefault();
+    document.title = href + ':' + (copies++);
+    const label = link.textContent;
+    link.textContent = COPIED;
+    link.classList.add('done');
+    setTimeout(() => { link.textContent = label; link.classList.remove('done'); }, 1400);
+    return;
+  }
   if (href.startsWith('#')) {
     event.preventDefault();
     const target = document.getElementById(decodeURIComponent(href.slice(1)));
@@ -149,8 +166,27 @@ class WebMarkdownPreview(Preview):
         self._base = _default_base()
         self._pending: str | None = None
         self._ratio: float | None = None
+        self._text = ""
         self.web.loadFinished.connect(self._on_loaded)
+        page.titleChanged.connect(self._title_changed)
+        page.scrollPositionChanged.connect(self._page_scrolled)
         self._load_shell()
+
+    def _title_changed(self, title: str) -> None:
+        # forge-copy:<index>:<click number>, set by the copy buttons.
+        parts = title.split(":")
+        if len(parts) == 3 and parts[0] == COPY_SCHEME and parts[1].isdigit():
+            copy_code_block(self._text, int(parts[1]))
+
+    def _page_scrolled(self, _position: QPointF) -> None:
+        # The page knows its full height; ask it for the position as a ratio.
+        page = self.web.page()
+        if page is not None:
+            page.runJavaScript("forgeRatio()", self._emit_ratio)
+
+    def _emit_ratio(self, ratio: object) -> None:
+        if isinstance(ratio, int | float):
+            self.scrolled.emit(max(0.0, min(1.0, float(ratio))))
 
     def _load_shell(self) -> None:
         self._ready = False
@@ -163,6 +199,7 @@ class WebMarkdownPreview(Preview):
 <script src="{_resource_url("forge.resources.web", "mermaid.min.js").toString()}"></script>
 <script>
 if (window.mermaid) {{ mermaid.initialize({config}); }}
+const COPIED = {json.dumps(tr("Copied"))};
 {_SCRIPT}
 </script>
 </head><body><div id="content"></div></body></html>"""
@@ -188,11 +225,13 @@ if (window.mermaid) {{ mermaid.initialize({config}); }}
         if base != self._base:
             # Relative images resolve against the document's folder.
             self._base = base
-            self._pending = render_body(text, rich=True)
+            self._text = text
+            self._pending = render_body(text, rich=True, copy_label=tr("Copy"))
             self._load_shell()
             self.show_view()
             return
-        self._push(render_body(text, rich=True))
+        self._text = text
+        self._push(render_body(text, rich=True, copy_label=tr("Copy")))
         self.show_view()
 
     def apply_theme(self, theme: Theme) -> None:
