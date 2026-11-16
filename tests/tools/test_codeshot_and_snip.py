@@ -262,3 +262,63 @@ def test_mac_area_capture_reports_a_missing_tool(qtbot: QtBot) -> None:
     MacAreaCapture(lambda pixmap, error: results.append((pixmap, error)), 2.0, parent).start()
     qtbot.waitUntil(lambda: bool(results), timeout=3000)
     assert results[0][0] is None and "screencapture" in results[0][1]
+
+
+def test_snip_now_skips_the_options_and_returns_to_minimized(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from forge.tools.utilities import capture, snipping
+    from forge.tools.utilities.annotate import Annotator
+
+    window = make_window(qtbot)
+    window.show()
+    window.showMinimized()
+    fake = QPixmap(40, 30)
+    fake.fill(QColor(9, 9, 9))
+    monkeypatch.setattr(capture, "grab", lambda _screen: fake)
+    monkeypatch.setattr(capture, "is_wayland", lambda: False)
+    monkeypatch.setattr(capture, "mac_capture_allowed", lambda ask=True: True)
+    monkeypatch.setattr(snipping, "ask_options", lambda _api: pytest.fail("no options window"))
+    opened: list[bool] = []
+    monkeypatch.setattr(Annotator, "exec", lambda self: opened.append(True) or 0)
+    api = window.extension_host.api("forge.utilities")
+    api.set_setting("snip_area", False)  # last time: full screen
+    window.extension_host.call("forge.utilities", "forge.tools.utilities.actions:snip_now")
+    second = snipping.snip_now(api)  # a second press while busy does nothing
+    assert snipping.Snipper.running is not second
+    qtbot.waitUntil(lambda: bool(opened), timeout=3000)
+    assert len(opened) == 1
+    qtbot.waitUntil(lambda: window.isMinimized(), timeout=2000)
+    assert snipping.Snipper.running is None
+
+
+def test_preferences_store_the_global_snip_shortcut(qtbot: QtBot) -> None:
+    from PyQt6.QtGui import QKeySequence
+
+    from forge.ui.preferences import PreferencesDialog
+
+    window = make_window(qtbot)
+    seen: list[str] = []
+    window.extension_events.subscribe("settings_changed", lambda: seen.append("x"), "test")
+    dialog = PreferencesDialog(window.settings, window.apply_settings, window)
+    qtbot.addWidget(dialog)
+    dialog.snip_key.setKeySequence(QKeySequence("Ctrl+Shift+F9"))
+    dialog.global_snip.setChecked(False)  # applies live, like every preference
+    assert seen
+    snip = window.settings.tools["forge.utilities"]
+    assert snip["global_snip"] is False and snip["global_snip_key"] == "Ctrl+Shift+F9"
+
+
+def test_annotation_window_is_brought_forward(qtbot: QtBot) -> None:
+    from forge.tools.utilities.annotate import BRING_FORWARD_MS, Annotator
+
+    window = make_window(qtbot)
+    shot = QPixmap(60, 40)
+    shot.fill(QColor(1, 2, 3))
+    annotator = Annotator(window.extension_host.api("forge.utilities"), shot)
+    raised: list[int] = []
+    annotator.dialog.exec = lambda: 0  # type: ignore[method-assign]
+    annotator.dialog.raise_ = lambda: raised.append(1)  # type: ignore[method-assign]
+    annotator.exec()
+    qtbot.waitUntil(lambda: len(raised) == len(BRING_FORWARD_MS), timeout=3000)
+    annotator.dialog.close()

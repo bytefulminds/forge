@@ -36,5 +36,12 @@ EXTENSION = ExtensionInfo(
             icon="scissors",
         ),
     ),
-    defaults={"snip_area": True, "snip_delay": 0, "snip_hide": True},
+    on_startup=f"{_ACTIONS}:startup",
+    defaults={
+        "snip_area": True,
+        "snip_delay": 0,
+        "snip_hide": True,
+        "global_snip": True,  # the shortcut also works while Forge is in the background
+        "global_snip_key": "Ctrl+Alt+Shift+S",
+    },
 )

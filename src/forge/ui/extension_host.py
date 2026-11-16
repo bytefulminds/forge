@@ -236,6 +236,10 @@ class ExtensionHost:
             if ext.on_startup:
                 self._call(ext.id, ext.on_startup)
 
+    def call(self, extension_id: str, target: str) -> None:
+        """Run ``"module:function"`` with the tool's API (errors are reported)."""
+        self._call(extension_id, target)
+
     def _call(self, extension_id: str, target: str) -> None:
         try:
             module_name, _, function_name = target.partition(":")

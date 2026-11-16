@@ -18,6 +18,9 @@ this file by `scripts/release_notes.py`, so every release needs a section here.
   and text in any color. Select shapes to move, resize or recolor them, crop the picture,
   erase shapes, undo every step, and copy the result. Areas use the system crosshair on
   macOS and the desktop's screenshot portal on Wayland.
+- The Snipping Tool shortcut also works while Forge is in the background or minimized
+  (Preferences > Snipping Tool sets the key or turns it off). On Wayland, bind
+  `forge --snip` to a key in the desktop settings instead; it reaches the running Forge.
 - Compare with Clipboard, and Quick Diff (`Ctrl+Alt+Shift+D`) to compare two pasted texts.
 - Markdown: a diagram editor to draw Mermaid flowcharts with the mouse (and edit
   existing ones): drag a connector onto a box or onto empty canvas, resize boxes,

@@ -389,6 +389,33 @@ class ForgeAPI:
         clipboard = QGuiApplication.clipboard()
         return clipboard.text() if clipboard is not None else ""
 
+    def set_global_shortcut(
+        self, name: str, sequence: str | None, callback: Callable[[], None]
+    ) -> str:
+        """A system-wide shortcut that works while Forge is in the background.
+
+        ``None`` or "" removes it. Returns "" when it works, otherwise why not:
+        "unsupported" (Wayland), "taken" (another program has it) or a message.
+        """
+        from forge.ui import global_hotkey
+
+        shortcuts: dict[str, global_hotkey.GlobalHotkey] = self._host.__dict__.setdefault(
+            "_global_shortcuts", {}
+        )
+        old = shortcuts.pop(f"{self.extension_id}:{name}", None)
+        if old is not None:
+            old.close()
+        if not sequence:
+            return ""
+        if not global_hotkey.supported():
+            return "unsupported"
+        try:
+            shortcut = global_hotkey.GlobalHotkey(sequence, callback, self._host)
+        except (global_hotkey.HotkeyError, OSError, AttributeError) as error:
+            return str(error) or "failed"
+        shortcuts[f"{self.extension_id}:{name}"] = shortcut
+        return ""
+
     def copy_image(self, image: QImage) -> None:
         """Put an image on the clipboard (to paste in a chat, document or mail)."""
         clipboard = QGuiApplication.clipboard()
@@ -422,7 +449,8 @@ class ForgeAPI:
     # Events, settings and background work -----------------------------------
 
     def on(self, event: str, callback: Callable[..., None]) -> None:
-        """Subscribe to "tab_changed" (editor) or "char_added" (editor, char)."""
+        """Subscribe to "tab_changed" (editor), "char_added" (editor, char),
+        "theme_changed" (theme) or "settings_changed" (after Preferences)."""
         self._host.extension_events.subscribe(event, callback, self.extension_id)
 
     def setting(self, key: str, default: object = None) -> object:

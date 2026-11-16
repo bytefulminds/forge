@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 
+from PyQt6 import sip
 from PyQt6.QtCore import QObject, QPoint, QRect, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
@@ -227,13 +228,27 @@ def ask_options(api: ForgeAPI) -> SnipOptions | None:
 class Snipper(QObject):
     """Runs one snip: wait, grab, choose an area, annotate."""
 
+    running: Snipper | None = None  # one snip at a time
+
     def __init__(self, api: ForgeAPI, options: SnipOptions) -> None:
         super().__init__(api.window)
         self.api = api
         self.options = options
         self.annotator: Annotator | None = None
+        window = api.window
+        # Started from the global shortcut while Forge was minimized or hidden:
+        # it goes back there after the annotation window closes.
+        self.was_minimized = window.isMinimized() or not window.isVisible()
 
     def start(self) -> None:
+        busy = Snipper.running
+        if busy is not None and not sip.isdeleted(busy):
+            if busy.annotator is not None:  # still annotating: show that window again
+                capture.bring_app_to_front()
+                busy.annotator.bring_forward()
+            self.deleteLater()
+            return
+        Snipper.running = self
         if not capture.mac_capture_allowed():
             self.api.inform(
                 tr("Screen Recording"),
@@ -244,9 +259,9 @@ class Snipper(QObject):
                     "from source, allow the terminal or IDE that starts it instead."
                 ),
             )
-            self.deleteLater()
+            self._done()
             return
-        if self.options.hide:
+        if self.options.hide and not self.was_minimized:
             self.api.window.hide()
         wait = self.options.delay * 1000 + (HIDE_SETTLE_MS if self.options.hide else 0)
         QTimer.singleShot(max(1, wait), self._grab)
@@ -285,14 +300,38 @@ class Snipper(QObject):
 
     def _finish(self, shot: QPixmap | None) -> None:
         window = self.api.window
-        if self.options.hide:
-            window.show()
+        has_shot = shot is not None and not shot.isNull()
+        if has_shot:
+            capture.bring_app_to_front()
+        if has_shot or (self.options.hide and not self.was_minimized):
+            window.showNormal() if window.isMinimized() else window.show()
             window.raise_()
             window.activateWindow()
-        if shot is not None and not shot.isNull():
+        if shot is not None and has_shot:
             self.annotator = Annotator(self.api, shot)
             self.annotator.exec()
+        if self.was_minimized:
+            window.showMinimized()
+        self._done()
+
+    def _done(self) -> None:
+        if Snipper.running is self:
+            Snipper.running = None
         self.deleteLater()
+
+
+def saved_options(api: ForgeAPI) -> SnipOptions:
+    """The choices of the last snip, without a delay: for the global shortcut."""
+    return SnipOptions(
+        bool(api.setting("snip_area", True)), 0, bool(api.setting("snip_hide", True))
+    )
+
+
+def snip_now(api: ForgeAPI) -> Snipper:
+    """Start a snip right away (global shortcut, ``forge --snip``)."""
+    snipper = Snipper(api, saved_options(api))
+    snipper.start()
+    return snipper
 
 
 def open_snipping_tool(api: ForgeAPI) -> Snipper | None:

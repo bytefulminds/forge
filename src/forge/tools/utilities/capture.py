@@ -75,6 +75,36 @@ def mac_capture_allowed(ask: bool = True) -> bool:
     return False
 
 
+def bring_app_to_front() -> None:
+    """macOS: make Forge the active app, so its next window opens on top.
+
+    Started from the global shortcut, Forge is in the background; without this
+    its windows may open behind the app you were working in, or the annotation
+    window behind Forge's own main window.
+    """
+    if sys.platform != "darwin":
+        return
+    path = ctypes.util.find_library("objc")
+    if not path:
+        return
+    try:
+        objc = ctypes.cdll.LoadLibrary(path)
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        send = objc.objc_msgSend
+        send.restype = ctypes.c_void_p
+        send.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        app = send(
+            objc.objc_getClass(b"NSApplication"), objc.sel_registerName(b"sharedApplication")
+        )
+        send.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+        send(app, objc.sel_registerName(b"activateIgnoringOtherApps:"), True)
+    except (OSError, AttributeError):
+        pass
+
+
 # macOS: the system's own area picker -------------------------------------------------
 
 
