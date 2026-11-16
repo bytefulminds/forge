@@ -107,6 +107,9 @@ class DocumentToolbar(QWidget):
         for widget in self._tool_widgets:
             if isinstance(widget, QToolButton):
                 self._icons.pop(widget, None)
+            # Out of the layout right away; deleteLater only runs in the event loop.
+            self._tools.removeWidget(widget)
+            widget.hide()
             widget.deleteLater()
         self._tool_widgets = []
         self.tool_buttons = {}

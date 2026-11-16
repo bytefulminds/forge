@@ -8,7 +8,7 @@
   developer reaches for every day. Open a file, get to work. Tools for JSON, CSV, Markdown,
   XML and YAML are built in, not bolted on.**
 
-**Version 0.2.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
+**Version 0.3.0** · [download](https://gitlab.com/bytefulminds/Forge/-/releases) for macOS, Linux and Windows
 
 [![pipeline](https://gitlab.com/bytefulminds/Forge/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/Forge/-/pipelines)
 ![license: GPL](https://img.shields.io/badge/license-GPL--3.0-5CC8E8)
@@ -61,7 +61,7 @@ selects it in the code and lights up its line.
 Find values with a path such as `$.items[*].name` or `$..id`: Forge selects every match
 while you type. Sort all keys, or turn JSON into CSV or YAML (and YAML back into JSON).
 
-![JSON path query selecting every name in the document](docs/images/forge-json-query.png)
+![JSON path query selecting the kind of every sensor in the document](docs/images/forge-json-query.png)
 
 ### CSV that understands your data
 

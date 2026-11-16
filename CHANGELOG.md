@@ -4,7 +4,7 @@ All notable changes to Forge. The newest version is at the top. Versions follow
 [semantic versioning](https://semver.org). The release notes on GitLab are taken from
 this file by `scripts/release_notes.py`, so every release needs a section here.
 
-## [Unreleased]
+## [0.3.0] - 2026-11-16
 
 ### Added
 
