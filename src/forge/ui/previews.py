@@ -41,6 +41,10 @@ class Preview(QStackedWidget):
     # so the editor can follow (split view).
     scrolled = pyqtSignal(float)
 
+    def shutdown(self) -> None:
+        """Called before the preview is deleted (the browser preview stops
+        listening to its page)."""
+
     # CSV: set by the document page from the editor (chosen or detected).
     delimiter: str | None = None
     csv_header: bool = True

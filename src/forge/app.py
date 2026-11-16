@@ -65,6 +65,21 @@ def _app_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def _tear_down(window: QObject) -> None:
+    """Delete the window while the application still exists.
+
+    Left to Python's exit, the browser preview may be destroyed after Qt itself,
+    or answer a pending script into a half deleted object; both crash on exit.
+    """
+    from forge.ui.previews import Preview
+
+    for preview in window.findChildren(Preview):
+        preview.shutdown()
+    window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    QCoreApplication.processEvents()
+
+
 SNIP_DELAY_MS = 600  # let the window settle before a snip at startup
 
 
@@ -134,5 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     if smoke_home is not None:
         code = smoke.run(window, smoke_home, argv)
         window.close()
-        return code
-    return app.exec()
+    else:
+        code = app.exec()
+    _tear_down(window)
+    return code

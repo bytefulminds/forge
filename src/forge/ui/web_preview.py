@@ -7,10 +7,14 @@ the scroll position stays put and Mermaid only redraws changed diagrams.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import weakref
+from collections.abc import Callable
 from importlib import resources
 from pathlib import Path
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
@@ -147,6 +151,18 @@ class _Page(QWebEnginePage):
         return super().acceptNavigationRequest(url, kind, is_main_frame)
 
 
+def _weak_callback(owner: object, method: str) -> Callable[[object], None]:
+    """A script callback that does nothing once ``owner`` is gone."""
+    ref = weakref.ref(owner)
+
+    def deliver(value: object) -> None:
+        target = ref()
+        if target is not None and not sip.isdeleted(target):  # type: ignore[arg-type]
+            getattr(target, method)(value)
+
+    return deliver
+
+
 class WebMarkdownPreview(Preview):
     def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
         self.web = QWebEngineView()
@@ -167,6 +183,7 @@ class WebMarkdownPreview(Preview):
         self._pending: str | None = None
         self._ratio: float | None = None
         self._text = ""
+        self._closing = False
         self.web.loadFinished.connect(self._on_loaded)
         page.titleChanged.connect(self._title_changed)
         page.scrollPositionChanged.connect(self._page_scrolled)
@@ -174,19 +191,36 @@ class WebMarkdownPreview(Preview):
 
     def _title_changed(self, title: str) -> None:
         # forge-copy:<index>:<click number>, set by the copy buttons.
+        if not self._alive():
+            return
         parts = title.split(":")
         if len(parts) == 3 and parts[0] == COPY_SCHEME and parts[1].isdigit():
             copy_code_block(self._text, int(parts[1]))
 
     def _page_scrolled(self, _position: QPointF) -> None:
         # The page knows its full height; ask it for the position as a ratio.
-        page = self.web.page()
-        if page is not None:
-            page.runJavaScript("forgeRatio()", self._emit_ratio)
+        if self._alive():
+            page = self.web.page()
+            if page is not None:
+                page.runJavaScript("forgeRatio()", _weak_callback(self, "_emit_ratio"))
+
+    def _alive(self) -> bool:
+        """False once Forge closes this preview: a page that is being destroyed
+        still answers pending scripts, and touching this object then crashes."""
+        return not self._closing and not sip.isdeleted(self) and not sip.isdeleted(self.web)
 
     def _emit_ratio(self, ratio: object) -> None:
-        if isinstance(ratio, int | float):
+        if self._alive() and isinstance(ratio, int | float):
             self.scrolled.emit(max(0.0, min(1.0, float(ratio))))
+
+    def shutdown(self) -> None:
+        """Stop listening to the page before it goes away."""
+        self._closing = True
+        page = self.web.page() if not sip.isdeleted(self.web) else None
+        if page is not None:
+            for signal in (page.titleChanged, page.scrollPositionChanged):
+                with contextlib.suppress(TypeError):
+                    signal.disconnect()
 
     def _load_shell(self) -> None:
         self._ready = False
