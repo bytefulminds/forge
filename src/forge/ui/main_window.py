@@ -1516,6 +1516,12 @@ class MainWindow(QMainWindow):
         self.settings.appearance = settings.appearance
         # Only the switch: the dates and the skipped version belong to the updater.
         self.settings.updates.check_automatically = settings.updates.check_automatically
+        # The Snipping Tool's global shortcut is set in Preferences too.
+        snip = settings.tools.get("forge.utilities", {})
+        mine = self.settings.tools.setdefault("forge.utilities", {})
+        for key in ("global_snip", "global_snip_key"):
+            if key in snip:
+                mine[key] = snip[key]
         file_dialogs.use_native_dialogs = settings.general.native_file_dialogs
         for tab in self.all_tabs():
             tab.apply_settings(self.settings.editor)
@@ -1523,6 +1529,7 @@ class MainWindow(QMainWindow):
         self._sync_view_actions()
         self.apply_appearance()
         self._sync_ui_language_actions()
+        self.extension_events.emit("settings_changed")
 
     def _zoom(self, steps: int) -> None:
         tab = self.current_tab()

@@ -7,7 +7,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from PyQt6.QtCore import QCoreApplication, QEvent, Qt
+from PyQt6.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer
 from PyQt6.QtGui import QFileOpenEvent, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
 
@@ -65,6 +65,29 @@ def _app_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+SNIP_DELAY_MS = 600  # let the window settle before a snip at startup
+
+
+def _snip(window: object) -> None:
+    from forge.ui.main_window import MainWindow
+
+    if isinstance(window, MainWindow):
+        window.extension_host.call("forge.utilities", "forge.tools.utilities.actions:snip_now")
+
+
+def _listen_for_other_starts(window: object) -> None:
+    """``forge --snip`` started later sends "snip" here."""
+    from forge.ui.instance import InstanceServer
+
+    def handle(message: str) -> None:
+        if message == "snip":
+            log.info("Snip requested by forge --snip")
+            _snip(window)
+
+    assert isinstance(window, QObject)
+    InstanceServer(handle, window)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     smoke_home = smoke.prepare_environment() if smoke.requested(argv) else None
@@ -85,6 +108,14 @@ def main(argv: list[str] | None = None) -> int:
     icon = _app_icon()
     app.setWindowIcon(icon)
 
+    snip = "--snip" in argv and smoke_home is None
+    if snip:
+        from forge.ui import instance
+
+        if instance.send("snip"):
+            log.info("Asked the running Forge for a snip")
+            return 0  # the running Forge takes the screenshot
+
     settings = Settings.load()
     install_language(resolve_language(settings.appearance.language))
 
@@ -96,6 +127,10 @@ def main(argv: list[str] | None = None) -> int:
     window.open_paths(Path(arg) for arg in argv[1:] if not arg.startswith("-"))
     window.open_paths(app.take_pending())
     window.show()
+    if smoke_home is None:
+        _listen_for_other_starts(window)
+        if snip:
+            QTimer.singleShot(SNIP_DELAY_MS, lambda: _snip(window))
     if smoke_home is not None:
         code = smoke.run(window, smoke_home, argv)
         window.close()

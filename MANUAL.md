@@ -653,6 +653,17 @@ Per system:
 
 The area and full screen modes take the screen under the mouse pointer.
 
+**From anywhere.** The shortcut (`Ctrl+Alt+Shift+S`, `Cmd+Option+Shift+S` on macOS) also
+works while Forge is in the background or minimized. It then skips the options window and
+uses your last choice of area or full screen; after Copy or Cancel, a minimized Forge goes
+back to the taskbar or Dock. Turn this off or pick another key in Preferences, under
+Snipping Tool. When another program already uses the key, Forge says so.
+
+On Linux with Wayland, programs may not listen to keys in the background. Add a keyboard
+shortcut in your desktop's settings (GNOME: Settings > Keyboard > Custom Shortcuts; KDE:
+System Settings > Shortcuts) that runs `forge --snip`. It asks the running Forge for a snip,
+or starts Forge when it is not running. The same command works on every system.
+
 ## 17. Preferences
 
 Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes them.
@@ -666,6 +677,7 @@ Settings > Preferences (`Ctrl+,`). Changes show immediately; *Cancel* undoes the
 | Appearance | Theme (Forge Dark, Forge Blue, Forge Light or follow the system) and interface language (English or Nederlands) |
 | Session | Remember open tabs and unsaved text; use the system file dialogs |
 | Updates | Check for updates automatically, once a day at startup (on by default) |
+| Snipping Tool | Whether the shortcut also works while Forge is in the background (on by default), and which key |
 
 The interface language changes after a restart.
 
@@ -705,7 +717,7 @@ Forge stays responsive with big files:
 | Quick diff | `Ctrl+Alt+Shift+D` | `Cmd+Option+Shift+D` |
 | Regex tester | `Ctrl+Alt+R` | `Cmd+Option+R` |
 | Code shot | `Ctrl+Alt+Shift+C` | `Cmd+Option+Shift+C` |
-| Snipping tool | `Ctrl+Alt+Shift+S` | `Cmd+Option+Shift+S` |
+| Snipping tool (also from other programs) | `Ctrl+Alt+Shift+S` | `Cmd+Option+Shift+S` |
 | Preferences | `Ctrl+,` | `Cmd+,` |
 
 ## 20. Where Forge keeps its files

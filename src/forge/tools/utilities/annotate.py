@@ -8,7 +8,8 @@ import math
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from PyQt6.QtCore import QLineF, QPointF, QRectF, QSizeF, Qt
+from PyQt6 import sip
+from PyQt6.QtCore import QLineF, QPointF, QRectF, QSizeF, Qt, QTimer
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -66,6 +67,7 @@ DRAWING = ("rect", "ellipse", "arrow", "line", "pen", "highlight")
 WIDTHS = (2, 4, 8)
 HANDLE = 5.0  # half the size of a resize handle, in screen pixels
 MIN_SIZE = 4.0
+BRING_FORWARD_MS = (0, 150, 400, 900)
 
 
 def tool_names() -> dict[str, str]:
@@ -979,4 +981,13 @@ class Annotator:
     def exec(self) -> int:
         self.dialog.show()
         self.fit()
+        # When Forge was in the background, the system may still be bringing the
+        # main window forward; put this window on top again once that settled.
+        for delay in BRING_FORWARD_MS:
+            QTimer.singleShot(delay, self.bring_forward)
         return self.dialog.exec()
+
+    def bring_forward(self) -> None:
+        if not sip.isdeleted(self.dialog) and self.dialog.isVisible():
+            self.dialog.raise_()
+            self.dialog.activateWindow()

@@ -10,13 +10,14 @@ import copy
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QKeySequence
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialogButtonBox,
     QFontComboBox,
     QFormLayout,
+    QKeySequenceEdit,
     QLabel,
     QSpinBox,
     QVBoxLayout,
@@ -27,7 +28,10 @@ from forge.core.settings import Settings
 from forge.i18n.catalog import LANGUAGES
 from forge.i18n.translator import current_language, tr
 from forge.themes.theme import SYSTEM_THEME_ID, THEME_CHOICES
+from forge.ui import global_hotkey
 from forge.ui.framed_dialog import FramedDialog
+
+DEFAULT_SNIP_KEY = "Ctrl+Alt+Shift+S"
 
 
 def theme_label(theme_id: str) -> str:
@@ -175,6 +179,43 @@ class PreferencesDialog(FramedDialog):
         self.check_updates.setChecked(self.settings.updates.check_automatically)
         form.addRow("", self.check_updates)
 
+        # Snipping Tool --------------------------------------------------------
+        form.addRow(_section(tr("Snipping Tool")))
+        snip = self.settings.tools.get("forge.utilities", {})
+        self.global_snip = QCheckBox(
+            tr("Shortcut also works while Forge is in the background"), self
+        )
+        self.global_snip.setToolTip(
+            tr(
+                "Start a snip from anywhere, also with Forge minimized, without the "
+                "options window (it uses your last choice of area or full screen)."
+            )
+        )
+        self.global_snip.setChecked(bool(snip.get("global_snip", True)))
+        self.snip_key = QKeySequenceEdit(self)
+        self.snip_key.setMaximumSequenceLength(1)
+        self.snip_key.setClearButtonEnabled(True)
+        self.snip_key.setKeySequence(
+            QKeySequence(str(snip.get("global_snip_key", DEFAULT_SNIP_KEY) or DEFAULT_SNIP_KEY))
+        )
+        form.addRow("", self.global_snip)
+        form.addRow(tr("Shortcut"), self.snip_key)
+        if not global_hotkey.supported():
+            self.global_snip.setEnabled(False)
+            self.snip_key.setEnabled(False)
+            note = QLabel(
+                tr(
+                    "Here programs cannot listen to keys in the background. Add a keyboard "
+                    "shortcut in your desktop's settings that runs: {command}",
+                    command="forge --snip",
+                ),
+                self,
+            )
+            note.setObjectName("resultNote")
+            note.setWordWrap(True)
+            note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            form.addRow("", note)
+
         layout.addStretch(1)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -202,8 +243,10 @@ class PreferencesDialog(FramedDialog):
             self.remember_session,
             self.native_dialogs,
             self.check_updates,
+            self.global_snip,
         ):
             box.toggled.connect(self._changed)
+        self.snip_key.editingFinished.connect(self._changed)
         self._loading = False
 
     def _collect(self) -> None:
@@ -226,6 +269,10 @@ class PreferencesDialog(FramedDialog):
         self.settings.general.remember_session = self.remember_session.isChecked()
         self.settings.general.native_file_dialogs = self.native_dialogs.isChecked()
         self.settings.updates.check_automatically = self.check_updates.isChecked()
+        snip = self.settings.tools.setdefault("forge.utilities", {})
+        snip["global_snip"] = self.global_snip.isChecked()
+        keys = self.snip_key.keySequence()
+        snip["global_snip_key"] = keys.toString(QKeySequence.SequenceFormat.PortableText)
 
     def _changed(self) -> None:
         if self._loading:
