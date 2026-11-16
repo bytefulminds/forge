@@ -114,6 +114,7 @@ class DocumentPage(QWidget):
         """Drop a preview that no longer fits the document's language."""
         self.refresh_toolbar()
         if self.preview is not None and self.editor.language.id != self._preview_language:
+            self.preview.shutdown()
             self.preview.deleteLater()
             self.preview = None
         if self.mode != TEXT:

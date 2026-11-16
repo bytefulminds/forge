@@ -185,6 +185,7 @@ def _check_web_preview() -> str:
         return bool(found) and found[-1] == 1
 
     ok = _wait_until(drawn, 60)
+    preview.shutdown()
     preview.close()
     _delete_now(preview)
     if not ok:
